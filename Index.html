@@ -168,23 +168,25 @@
       #previewTable td.cell-empty{background:#fefce8}
       #previewTable td.cell-source{background:#f0fdf4;color:#15803d;font-size:11px;font-style:italic}
 
-      /* UPDATE PAGE */
-      .update-layout{display:flex;flex-direction:column;gap:16px;flex:1;overflow-y:auto;min-height:0}
-      .update-top{display:grid;grid-template-columns:1fr 1fr;gap:16px;flex-shrink:0}
-      .update-results-box{background:var(--bg-card);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);flex-shrink:0;transition:background .3s}
-      .stat-card{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:500;border:1px solid transparent}
-      .stat-dup{background:#ecfdf5;color:#065f46;border-color:#6ee7b7}
-      .stat-new{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd}
-      .stat-conflict{background:#fff7ed;color:#c2410c;border-color:#fbbf24}
-      .stat-invalid{background:#fef2f2;color:#991b1b;border-color:#fca5a5}
-      .failed-tab-btn{padding:6px 14px;font-size:12px;border-radius:8px;border:none;cursor:pointer;font-family:'Prompt',sans-serif;font-weight:500;transition:all .2s}
-      .failed-tab-active-orange{background:var(--accent-orange);color:white}
-      .failed-tab-active-red{background:var(--accent-red);color:white}
-      .failed-tab-inactive{background:var(--bg-check);color:var(--text-secondary);border:1px solid var(--border)}
-      .update-failed-table th{padding:6px 10px;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);font-size:11px;font-weight:600}
-      .update-failed-table td{padding:5px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;font-size:11px}
-      .update-failed-table tr:nth-child(even) td{background:var(--bg-check)}
-      @media(max-width:900px){.update-top{grid-template-columns:1fr}}
+      /* PDF EXTRACT PAGE (Tab 3) */
+      .pdf-layout{display:flex;flex-direction:column;gap:16px;flex:1;overflow-y:auto;min-height:0}
+      .pdf-top{display:grid;grid-template-columns:1fr 1fr;gap:16px;flex-shrink:0}
+      .pdf-drop-zone{border:2.5px dashed var(--border);border-radius:16px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .3s;background:var(--bg-check);min-height:160px;display:flex;align-items:center;justify-content:center}
+      .pdf-drop-zone:hover,.pdf-drop-zone.dragover{border-color:var(--accent);background:rgba(59,130,246,.06)}
+      .pdf-drop-zone .drop-icon{font-size:48px;margin-bottom:8px}
+      .pdf-drop-zone p{font-size:13px;color:var(--text-secondary);line-height:1.6}
+      .pdf-file-badge{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-check);border:1px solid var(--accent);border-radius:10px;margin-top:12px}
+      .pdf-file-badge .fname{font-weight:600;font-size:13px;color:var(--accent);flex:1;word-break:break-all}
+      .pdf-file-badge .fsize{font-size:11px;color:var(--text-secondary);white-space:nowrap}
+      .pdf-preview-box{background:var(--bg-card);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);flex-shrink:0;transition:background .3s}
+      #pdfPreviewTable{width:100%;border-collapse:collapse;font-size:12px;min-width:max-content}
+      #pdfPreviewTable th{padding:7px 10px;text-align:left;font-size:11px;font-weight:600;white-space:nowrap;background:#334155;color:white;position:sticky;top:0;z-index:2;border-right:1px solid rgba(255,255,255,.1)}
+      #pdfPreviewTable td{padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;font-size:12px;cursor:text}
+      #pdfPreviewTable td:focus{outline:2px solid var(--accent);outline-offset:-1px;background:#eff6ff;overflow:visible;white-space:normal;max-width:none}
+      #pdfPreviewTable td.cell-page{background:#f0fdf4;color:#15803d;font-size:11px;font-style:italic;cursor:default}
+      #pdfPreviewTable tr:hover td{background:rgba(59,130,246,.04)}
+      .pdf-stat{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:500}
+      @media(max-width:900px){.pdf-top{grid-template-columns:1fr}}
     </style>
   </head>
   <body>
@@ -233,7 +235,7 @@
       <div class="nav-bar">
         <div id="tab1" class="nav-item active" onclick="showPage('chat-page','tab1')">💬 AI Chat Bot</div>
         <div id="tab2" class="nav-item" onclick="showPage('merge-page','tab2')">📦 จัดการ / รวมไฟล์</div>
-        <div id="tab3" class="nav-item" onclick="showPage('update-page','tab3');loadUpdatePageData()">🔄 Update</div>
+        <div id="tab3" class="nav-item" onclick="showPage('update-page','tab3')">📄 PDF Extract</div>
         <div class="nav-spacer"></div>
         <button class="nav-toggle" id="darkToggle" onclick="toggleDarkMode()" title="สลับ Dark Mode">🌙</button>
       </div>
@@ -404,131 +406,100 @@
         </div>
       </div>
 
-      <!-- ==================== UPDATE PAGE ==================== -->
+      <!-- ==================== PDF EXTRACT PAGE (Tab 3) ==================== -->
       <div id="update-page" class="page">
-        <div class="update-layout">
+        <div class="pdf-layout">
 
-          <!-- ──── TOP: เลือกไฟล์ ──── -->
-          <div class="update-top">
+          <!-- ──── TOP: Upload + Settings ──── -->
+          <div class="pdf-top">
 
-            <!-- Source panel -->
+            <!-- LEFT: Upload PDF -->
             <div class="merge-section">
-              <h3>📂 1. ไฟล์อัปเดท (Source)
-                <span class="refresh-icon" onclick="loadUpdatePageData()" title="รีเฟรช">🔄</span>
-              </h3>
-              <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
-                ไฟล์ที่รวมเสร็จแล้วจากโฟลเดอร์อัปเดท
-              </p>
-              <div id="updateSrcList" class="check-area" style="flex:1;max-height:240px;overflow-y:auto;">
-                <p style="color:var(--text-secondary);font-size:13px;margin:0;">กำลังโหลด...</p>
+              <h3>📄 1. อัพโหลด PDF</h3>
+              <input type="file" id="pdfFileInput" accept=".pdf" style="display:none;" onchange="onPdfFileSelected(this)">
+
+              <div id="pdfDropZone" class="pdf-drop-zone" onclick="document.getElementById('pdfFileInput').click()">
+                <div>
+                  <div class="drop-icon">📤</div>
+                  <p>ลากไฟล์ PDF มาวางที่นี่<br>หรือ <span style="color:var(--accent);font-weight:600;text-decoration:underline;">คลิกเพื่อเลือกไฟล์</span></p>
+                  <p style="font-size:11px;color:var(--text-secondary);margin-top:6px;">รองรับไฟล์ .pdf ขนาดไม่เกิน 20 MB</p>
+                </div>
               </div>
-              <label class="sidebar-label" style="display:block;margin-top:14px;margin-bottom:4px;">📋 Sheet</label>
-              <select id="updateSrcSheet" class="input-field" onchange="updateAnalyzeReady()">
-                <option value="">-- เลือก Sheet --</option>
-              </select>
-            </div>
 
-            <!-- Target panel -->
-            <div class="merge-section">
-              <h3>🎯 2. ไฟล์ปลายทาง (Target)</h3>
-              <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
-                ไฟล์ที่ต้องการนำข้อมูลใหม่เข้าไป
+              <div id="pdfFileInfo" style="display:none;">
+                <div class="pdf-file-badge">
+                  <span style="font-size:24px;">📎</span>
+                  <div>
+                    <div class="fname" id="pdfFileName"></div>
+                    <div class="fsize" id="pdfFileSize"></div>
+                  </div>
+                  <button onclick="clearPdfFile()" class="btn btn-red" style="padding:4px 10px;font-size:11px;">✕ ลบ</button>
+                </div>
+              </div>
+
+              <label class="sidebar-label" style="display:block;margin-top:16px;margin-bottom:6px;">📑 เลือกหน้าที่ต้องการแปลง</label>
+              <input type="text" id="pdfPageRange" class="input-field" value="all" placeholder='เช่น "all" หรือ "15-25, 30-35"'>
+              <p style="font-size:11px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">
+                ใส่ <b>"all"</b> = ทุกหน้า &nbsp;|&nbsp; ระบุช่วง เช่น <b>"15-25"</b> หรือ <b>"5-10, 20-30"</b>
               </p>
-              <label class="sidebar-label" style="display:block;margin-bottom:4px;">📄 ไฟล์</label>
-              <select id="updateTgtFile" class="input-field" style="margin-bottom:14px;" onchange="loadUpdateTgtSheets()">
-                <option value="">-- เลือกไฟล์ --</option>
-              </select>
-              <label class="sidebar-label" style="display:block;margin-bottom:4px;">📋 Sheet</label>
-              <select id="updateTgtSheet" class="input-field" style="margin-bottom:20px;" onchange="updateAnalyzeReady()">
-                <option value="">-- เลือก Sheet --</option>
-              </select>
-              <button id="analyzeBtn" onclick="runAnalyze(this)" class="btn btn-primary"
-                style="width:100%;padding:13px;font-size:14px;font-weight:600;" disabled>
-                🔍 วิเคราะห์และเปรียบเทียบ
+
+              <button id="pdfExtractBtn" onclick="startPdfExtract(this)" class="btn btn-primary"
+                style="width:100%;margin-top:16px;padding:14px;font-size:15px;font-weight:600;" disabled>
+                🤖 แปลงข้อมูลด้วย AI
               </button>
             </div>
 
-          </div><!-- /update-top -->
+            <!-- RIGHT: Output settings -->
+            <div class="merge-section">
+              <h3>💾 2. ตั้งค่าผลลัพธ์</h3>
+              <label class="sidebar-label" style="display:block;margin-bottom:6px;">✏️ ชื่อไฟล์ Google Sheet</label>
+              <input type="text" id="pdfOutputName" class="input-field" placeholder="ชื่อไฟล์ที่จะสร้าง..." style="margin-bottom:16px;">
 
-          <!-- ──── RESULTS ──── -->
-          <div id="updateResultsArea" class="update-results-box" style="display:none;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-              <h3 style="margin:0;font-size:16px;">📊 ผลการวิเคราะห์</h3>
-              <button id="applyUpdateBtn" onclick="applyUpdate(this)" class="btn btn-green"
-                style="display:none;padding:10px 24px;font-size:13px;font-weight:600;">
-                🚀 เพิ่มแถวใหม่เข้าไฟล์ปลายทาง
+              <!-- Stats (แสดงหลัง extract) -->
+              <div id="pdfStatsArea" style="display:none;padding:14px;background:var(--bg-check);border-radius:10px;border:1px solid var(--border);margin-bottom:16px;">
+                <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--accent);">📊 ผลการแปลง</div>
+                <div id="pdfStatsContent" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+              </div>
+
+              <!-- Save button -->
+              <button id="pdfSaveBtn" onclick="savePdfData(this)" class="btn btn-green"
+                style="display:none;width:100%;padding:14px;font-size:15px;font-weight:600;">
+                💾 บันทึกลง Google Sheet
               </button>
+
+              <!-- Result banner -->
+              <div id="pdfResultBanner" class="merge-result-banner" style="margin-top:12px;">
+                <b style="color:#065f46;font-size:13px;">✅ บันทึกสำเร็จ!</b>
+                <div style="margin-top:6px;font-size:12px;color:#065f46;" id="pdfResultMsg"></div>
+                <a id="pdfResultLink" href="#" target="_blank" style="display:inline-block;margin-top:8px;color:var(--accent);font-weight:600;text-decoration:none;">
+                  🔗 เปิดไฟล์ใน Google Sheets
+                </a>
+              </div>
             </div>
-            <div id="updateStatCards" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
-            <div id="updateApplyResult"
-              style="display:none;margin-top:12px;background:#ecfdf5;border:1px solid #6ee7b7;
-                     border-radius:8px;padding:10px 14px;font-size:13px;color:#065f46;"></div>
+
+          </div><!-- /pdf-top -->
+
+          <!-- ──── PREVIEW TABLE (editable) ──── -->
+          <div id="pdfPreviewArea" class="pdf-preview-box" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <h3 style="margin:0;font-size:16px;">🔍 Preview — <span style="font-weight:400;font-size:13px;">คลิกที่เซลล์เพื่อแก้ไข</span></h3>
+              <div style="display:flex;gap:8px;">
+                <button onclick="addPdfRow()" class="btn btn-primary" style="font-size:12px;padding:6px 14px;">➕ เพิ่มแถว</button>
+                <button onclick="deleteSelectedPdfRows()" class="btn btn-red" style="font-size:12px;padding:6px 14px;">🗑️ ลบแถวที่เลือก</button>
+              </div>
+            </div>
+            <div style="overflow:auto;max-height:400px;border:1px solid var(--border);border-radius:10px;">
+              <table id="pdfPreviewTable">
+                <thead id="pdfPreviewHead"></thead>
+                <tbody id="pdfPreviewBody"></tbody>
+              </table>
+            </div>
+            <p style="font-size:11px;color:var(--text-secondary);margin-top:8px;">
+              คลิกที่เซลล์เพื่อแก้ไขข้อมูลโดยตรง &nbsp;|&nbsp; ติ๊กช่องซ้ายเพื่อเลือกแถวที่ต้องการลบ
+            </p>
           </div>
 
-          <!-- ──── FAILED ROWS ──── -->
-          <div id="failedRowsArea" class="update-results-box" style="display:none;">
-            <h3 style="margin-bottom:14px;font-size:16px;">⚠️ แถวที่ไม่สามารถอัปเดทอัตโนมัติได้</h3>
-
-            <!-- Tab switcher -->
-            <div style="display:flex;gap:8px;margin-bottom:12px;">
-              <button id="tabConflicts" class="failed-tab-btn failed-tab-active-orange"
-                onclick="showFailedTab('conflicts')">
-                ⚡ ข้อมูลขัดแย้ง <span id="conflictCountBadge"></span>
-              </button>
-              <button id="tabInvalids" class="failed-tab-btn failed-tab-inactive"
-                onclick="showFailedTab('invalids')">
-                ❌ ข้อมูลไม่ครบ <span id="invalidCountBadge"></span>
-              </button>
-            </div>
-
-            <!-- Table -->
-            <div id="failedTableWrap"
-              style="overflow:auto;max-height:260px;border:1px solid var(--border);border-radius:8px;margin-bottom:16px;"></div>
-
-            <!-- Destination picker -->
-            <div style="padding:14px 16px;background:var(--bg-check);border-radius:10px;border:1px solid var(--border);">
-              <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:12px;">
-                📤 เลือกว่าจะเอาแถวเหล่านี้ไปไว้ที่ไหน
-              </div>
-              <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
-
-                <div style="flex:1;min-width:200px;">
-                  <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px;">ไฟล์ปลายทาง</label>
-                  <select id="failedDestFile" class="input-field" style="font-size:12px;">
-                    <option value="">-- เลือกไฟล์ --</option>
-                  </select>
-                </div>
-
-                <div style="flex:1;min-width:160px;">
-                  <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px;">ชื่อ Sheet</label>
-                  <input type="text" id="failedDestSheet" class="input-field"
-                    placeholder="เช่น: Failed_Rows" value="Failed_Rows" style="font-size:12px;">
-                </div>
-
-                <div style="min-width:140px;">
-                  <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px;">ส่งแถวประเภท</label>
-                  <div style="display:flex;gap:12px;">
-                    <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
-                      <input type="checkbox" id="sendConflicts" checked> ขัดแย้ง
-                    </label>
-                    <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
-                      <input type="checkbox" id="sendInvalids" checked> ไม่ครบ
-                    </label>
-                  </div>
-                </div>
-
-                <button onclick="sendFailedRows(this)" class="btn btn-purple"
-                  style="padding:10px 22px;font-size:13px;font-weight:600;">
-                  💾 บันทึก
-                </button>
-
-              </div>
-              <div id="failedSendResult" style="display:none;margin-top:10px;font-size:12px;color:var(--accent-green);"></div>
-            </div>
-
-          </div><!-- /failedRowsArea -->
-
-        </div><!-- /update-layout -->
+        </div><!-- /pdf-layout -->
       </div><!-- /update-page -->
 
     </div><!-- end #main-app -->
@@ -1844,310 +1815,241 @@
       }
 
       /* ==========================================
-         UPDATE TAB — state + functions
+         PDF EXTRACT TAB — state + functions
          ========================================== */
-      var updateState = {
-        srcFileId:   '',
-        srcFileName: '',
-        tgtFileId:   '',
-        analysis:    null,
-        activeFailedTab: 'conflicts'
+      /* PDF state */
+      var pdfState = {
+        base64: null,
+        fileName: '',
+        extractedRows: []   // array of {type,customer,brand,...,page}
       };
 
-      /* โหลดไฟล์ทั้งหมดสำหรับหน้า Update */
-      function loadUpdatePageData() {
-        var srcList = document.getElementById('updateSrcList');
-        srcList.innerHTML = "<p style='color:var(--text-secondary);font-size:13px;margin:0;'>กำลังโหลด...</p>";
+      /* Short keys ใช้ใน Gemini JSON */
+      var PDF_KEYS = [
+        'type','customer','brand','promo','detail',
+        'normalPrice','discount','extraDiscount','netPrice',
+        'mnpDiscount','advancePayment','campaign','contract',
+        'startDate','endDate','page'
+      ];
+      var PDF_HEADERS = [
+        'ประเภท','ประเภทลูกค้า','แบรนด์/แคมเปญ','ชื่อโปรโมชั่น','รายละเอียด',
+        'ราคาปกติ','ส่วนลดค่าเครื่อง','ส่วนลดเพิ่มเติม','ราคาหลังลด',
+        'ส่วนลด MNP','ค่าบริการเหมาจ่าย','โปรโมชั่นเริ่มต้น','สัญญา (เดือน)',
+        'Start Sale date','Sale to date','หน้าที่'
+      ];
 
-        /* reset state */
-        updateState.srcFileId = ''; updateState.srcFileName = '';
-        updateState.analysis  = null;
-        document.getElementById('updateSrcSheet').innerHTML = '<option value="">-- เลือก Sheet --</option>';
-        document.getElementById('updateResultsArea').style.display = 'none';
-        document.getElementById('failedRowsArea').style.display    = 'none';
-        document.getElementById('analyzeBtn').disabled = true;
-
-        /* โหลด source files จาก UPDATE_FOLDER_ID */
-        google.script.run
-          .withSuccessHandler(function(files) {
-            srcList.innerHTML = '';
-            if (!files || files.length === 0) {
-              srcList.innerHTML = "<div class='empty-state'><div class='empty-icon'>📂</div><p>ไม่พบไฟล์ในโฟลเดอร์อัปเดท</p></div>";
-              return;
-            }
-            files.forEach(function(f) {
-              var item = document.createElement('div');
-              item.className = 'check-item';
-              var lbl = document.createElement('label');
-              var rb  = document.createElement('input');
-              rb.type = 'radio'; rb.name = 'updateSrcFile'; rb.value = f.id;
-              rb.addEventListener('change', function() {
-                updateState.srcFileId   = f.id;
-                updateState.srcFileName = f.name;
-                loadUpdateSrcSheets(f.id);
-                updateAnalyzeReady();
-              });
-              lbl.appendChild(rb);
-              lbl.appendChild(document.createTextNode(' ' + f.name));
-              item.appendChild(lbl);
-              srcList.appendChild(item);
-            });
-          })
-          .withFailureHandler(function(e) {
-            srcList.innerHTML = "<p style='color:var(--accent-red);font-size:13px;margin:0;'>โหลดล้มเหลว: " + escapeHtml(e.message) + "</p>";
-          })
-          .getUpdateFileList(SESSION_TOKEN);
-
-        /* โหลด target files (MAIN + TARGET folder) */
-        loadUpdateTargetFileList();
-      }
-
-      function loadUpdateTargetFileList() {
-        google.script.run
-          .withSuccessHandler(function(files) {
-            var tgtSel  = document.getElementById('updateTgtFile');
-            var destSel = document.getElementById('failedDestFile');
-            tgtSel.innerHTML  = '<option value="">-- เลือกไฟล์ --</option>';
-            destSel.innerHTML = '<option value="">-- เลือกไฟล์ --</option>';
-            (files || []).forEach(function(f) {
-              tgtSel.add(new Option(f.name, f.id));
-              destSel.add(new Option(f.name, f.id));
-            });
-          })
-          .withFailureHandler(function(e) { if (!handleError(e)) console.error('โหลดไฟล์ target ล้มเหลว:', e.message); })
-          .getCombinedFileList(SESSION_TOKEN);
-      }
-
-      /* โหลด sheet list สำหรับ source */
-      function loadUpdateSrcSheets(fileId) {
-        var sel = document.getElementById('updateSrcSheet');
-        sel.innerHTML = '<option value="">กำลังโหลด...</option>';
-        google.script.run
-          .withSuccessHandler(function(results) {
-            sel.innerHTML = '<option value="">-- เลือก Sheet --</option>';
-            if (results && results[0] && results[0].sheets) {
-              results[0].sheets.forEach(function(s) {
-                if (!s.isHidden) sel.add(new Option(s.name + ' (' + s.rows + ' rows)', s.name));
-              });
-              if (sel.options.length === 2) { sel.selectedIndex = 1; updateAnalyzeReady(); }
-            }
-          })
-          .withFailureHandler(function(e) {
-            sel.innerHTML = '<option value="">โหลดล้มเหลว</option>';
-          })
-          .getSheetNamesMulti(SESSION_TOKEN, [fileId]);
-      }
-
-      /* โหลด sheet list สำหรับ target */
-      function loadUpdateTgtSheets() {
-        var fileId = document.getElementById('updateTgtFile').value;
-        var sel    = document.getElementById('updateTgtSheet');
-        sel.innerHTML = '<option value="">-- เลือก Sheet --</option>';
-        updateState.tgtFileId = fileId;
-        updateAnalyzeReady();
-        if (!fileId) return;
-        google.script.run
-          .withSuccessHandler(function(results) {
-            sel.innerHTML = '<option value="">-- เลือก Sheet --</option>';
-            if (results && results[0] && results[0].sheets) {
-              results[0].sheets.forEach(function(s) {
-                if (!s.isHidden) sel.add(new Option(s.name + ' (' + s.rows + ' rows)', s.name));
-              });
-              if (sel.options.length === 2) { sel.selectedIndex = 1; updateAnalyzeReady(); }
-            }
-          })
-          .withFailureHandler(function(e) { sel.innerHTML = '<option value="">โหลดล้มเหลว</option>'; })
-          .getSheetNamesMulti(SESSION_TOKEN, [fileId]);
-      }
-
-      /* เปิด/ปิดปุ่ม Analyze ตามความครบถ้วนของการเลือก */
-      function updateAnalyzeReady() {
-        var ok = updateState.srcFileId &&
-                 document.getElementById('updateSrcSheet').value &&
-                 document.getElementById('updateTgtFile').value &&
-                 document.getElementById('updateTgtSheet').value;
-        document.getElementById('analyzeBtn').disabled = !ok;
-      }
-
-      /* เรียก analyzeUpdateRows แล้วแสดงผล */
-      function runAnalyze(btn) {
-        var srcSheet = document.getElementById('updateSrcSheet').value;
-        var tgtFile  = document.getElementById('updateTgtFile').value;
-        var tgtSheet = document.getElementById('updateTgtSheet').value;
-
-        btn.disabled = true;
-        toggleLoading(true, '🔍 กำลังวิเคราะห์ข้อมูล...');
-
-        google.script.run
-          .withSuccessHandler(function(data) {
-            toggleLoading(false); btn.disabled = false;
-            if (data.error) { alert('❌ ' + data.error); return; }
-            updateState.analysis = data;
-            renderAnalysis(data);
-          })
-          .withFailureHandler(function(e) {
-            toggleLoading(false); btn.disabled = false;
-            if (!handleError(e)) alert('วิเคราะห์ล้มเหลว: ' + e.message);
-          })
-          .analyzeUpdateRows(SESSION_TOKEN, updateState.srcFileId, srcSheet, tgtFile, tgtSheet);
-      }
-
-      /* แสดงผลลัพธ์การวิเคราะห์ */
-      function renderAnalysis(data) {
-        var area      = document.getElementById('updateResultsArea');
-        var cards     = document.getElementById('updateStatCards');
-        var applyBtn  = document.getElementById('applyUpdateBtn');
-        var applyRes  = document.getElementById('updateApplyResult');
-        applyRes.style.display = 'none';
-
-        cards.innerHTML =
-          '<div class="stat-card stat-dup">✅ ซ้ำ (ข้าม): <b>' + data.duplicates + ' แถว</b></div>' +
-          '<div class="stat-card stat-new">➕ ใหม่ (พร้อมเพิ่ม): <b>' + data.newRowsCount + ' แถว</b></div>' +
-          '<div class="stat-card stat-conflict">⚡ ขัดแย้ง: <b>' + data.conflicts.length + ' แถว</b></div>' +
-          '<div class="stat-card stat-invalid">❌ ข้อมูลไม่ครบ: <b>' + data.invalids.length + ' แถว</b></div>';
-
-        applyBtn.style.display = data.newRowsCount > 0 ? 'inline-flex' : 'none';
-        area.style.display = 'block';
-
-        /* Failed rows section */
-        var failedArea = document.getElementById('failedRowsArea');
-        var total      = data.conflicts.length + data.invalids.length;
-        document.getElementById('conflictCountBadge').textContent = '(' + data.conflicts.length + ')';
-        document.getElementById('invalidCountBadge').textContent  = '(' + data.invalids.length + ')';
-
-        if (total > 0) {
-          failedArea.style.display = 'block';
-          showFailedTab('conflicts');
-        } else {
-          failedArea.style.display = 'none';
-        }
-
-        /* เลื่อน scroll ไปยัง results */
-        setTimeout(function() { area.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
-      }
-
-      /* สลับ tab conflicts / invalids */
-      function showFailedTab(tab) {
-        var data = updateState.analysis;
-        if (!data) return;
-        updateState.activeFailedTab = tab;
-        var wrap  = document.getElementById('failedTableWrap');
-        var cBtn  = document.getElementById('tabConflicts');
-        var iBtn  = document.getElementById('tabInvalids');
-        var rows  = tab === 'conflicts' ? data.conflicts : data.invalids;
-
-        /* style ปุ่ม tab */
-        if (tab === 'conflicts') {
-          cBtn.className = 'failed-tab-btn failed-tab-active-orange';
-          iBtn.className = 'failed-tab-btn failed-tab-inactive';
-        } else {
-          cBtn.className = 'failed-tab-btn failed-tab-inactive';
-          iBtn.className = 'failed-tab-btn failed-tab-active-red';
-        }
-
-        if (rows.length === 0) {
-          wrap.innerHTML = "<p style='text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;'>ไม่มีแถวในหมวดนี้ 👌</p>";
-          return;
-        }
-
-        var headers  = data.srcHeaders || [];
-        var showCols = Math.min(headers.length, 8); /* แสดงสูงสุด 8 คอลัมน์ */
-
-        var html = '<table class="update-failed-table" style="width:100%;border-collapse:collapse;min-width:max-content;">' +
-          '<thead style="position:sticky;top:0;background:#334155;color:white;z-index:2;"><tr>' +
-          '<th style="padding:6px 10px;">แถวที่</th>' +
-          '<th style="padding:6px 10px;min-width:160px;">เหตุผล</th>';
-        headers.slice(0, showCols).forEach(function(h) {
-          html += '<th style="padding:6px 10px;">' + escapeHtml(h) + '</th>';
-        });
-        html += '</tr></thead><tbody>';
-
-        rows.forEach(function(r) {
-          html += '<tr><td style="padding:5px 10px;font-weight:600;color:var(--accent);">' + r.rowNum + '</td>' +
-            '<td style="padding:5px 10px;color:var(--accent-orange);font-size:11px;">' + escapeHtml(r.reason) + '</td>';
-          r.data.slice(0, showCols).forEach(function(v) {
-            html += '<td style="padding:5px 10px;">' + escapeHtml(v || '') + '</td>';
+      /* ===== FILE UPLOAD ===== */
+      (function() {
+        document.addEventListener('DOMContentLoaded', function() {
+          var zone = document.getElementById('pdfDropZone');
+          if (!zone) return;
+          zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('dragover'); });
+          zone.addEventListener('dragleave', function()  { zone.classList.remove('dragover'); });
+          zone.addEventListener('drop', function(e) {
+            e.preventDefault(); zone.classList.remove('dragover');
+            var files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type === 'application/pdf') {
+              document.getElementById('pdfFileInput').files = files;
+              onPdfFileSelected(document.getElementById('pdfFileInput'));
+            } else { alert('กรุณาเลือกไฟล์ .pdf เท่านั้น'); }
           });
-          html += '</tr>';
         });
-        html += '</tbody></table>';
-        wrap.innerHTML = html;
+      })();
+
+      function onPdfFileSelected(input) {
+        var file = input.files[0];
+        if (!file) return;
+        if (file.type !== 'application/pdf') { alert('กรุณาเลือกไฟล์ .pdf เท่านั้น'); input.value = ''; return; }
+        if (file.size > 20 * 1024 * 1024) { alert('ไฟล์ใหญ่เกินไป (สูงสุด 20 MB)'); input.value = ''; return; }
+
+        pdfState.fileName = file.name;
+        document.getElementById('pdfFileName').textContent = file.name;
+        document.getElementById('pdfFileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+        document.getElementById('pdfDropZone').style.display = 'none';
+        document.getElementById('pdfFileInfo').style.display = 'block';
+
+        /* ตั้งชื่อ output อัตโนมัติ */
+        var baseName = file.name.replace(/\.pdf$/i, '');
+        document.getElementById('pdfOutputName').value = baseName + '_Extracted';
+
+        /* อ่านเป็น base64 */
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var b64 = e.target.result.split(',')[1]; /* ตัด data:...;base64, ออก */
+          pdfState.base64 = b64;
+          document.getElementById('pdfExtractBtn').disabled = false;
+        };
+        reader.readAsDataURL(file);
       }
 
-      /* อัปเดทแถวใหม่เข้าไฟล์ปลายทาง */
-      function applyUpdate(btn) {
-        var count = updateState.analysis ? updateState.analysis.newRowsCount : 0;
-        if (!confirm('ต้องการเพิ่ม ' + count + ' แถวใหม่เข้าไฟล์ปลายทางหรือไม่?')) return;
+      function clearPdfFile() {
+        pdfState.base64 = null; pdfState.fileName = ''; pdfState.extractedRows = [];
+        document.getElementById('pdfFileInput').value = '';
+        document.getElementById('pdfDropZone').style.display = 'flex';
+        document.getElementById('pdfFileInfo').style.display = 'none';
+        document.getElementById('pdfExtractBtn').disabled = true;
+        document.getElementById('pdfPreviewArea').style.display = 'none';
+        document.getElementById('pdfStatsArea').style.display = 'none';
+        document.getElementById('pdfSaveBtn').style.display = 'none';
+        document.getElementById('pdfResultBanner').classList.remove('visible');
+      }
 
-        var srcSheet = document.getElementById('updateSrcSheet').value;
-        var tgtFile  = document.getElementById('updateTgtFile').value;
-        var tgtSheet = document.getElementById('updateTgtSheet').value;
+      /* ===== AI EXTRACT ===== */
+      function startPdfExtract(btn) {
+        if (!pdfState.base64) return alert('กรุณาอัพโหลดไฟล์ PDF ก่อน');
+        var pageRange = document.getElementById('pdfPageRange').value.trim() || 'all';
 
         btn.disabled = true;
-        toggleLoading(true, '🚀 กำลังอัปเดทข้อมูล...');
+        toggleLoading(true, '🤖 AI กำลังอ่าน PDF และสกัดข้อมูลโปรโมชั่น...\nอาจใช้เวลา 15-60 วินาที');
 
         google.script.run
-          .withSuccessHandler(function(r) {
+          .withSuccessHandler(function(result) {
             toggleLoading(false); btn.disabled = false;
-            if (r.error) { alert('❌ ' + r.error); return; }
-            var res = document.getElementById('updateApplyResult');
-            res.textContent  = '✅ เพิ่มสำเร็จ ' + r.added + ' แถว — กำลังวิเคราะห์ใหม่...';
-            res.style.display = 'block';
-            btn.style.display = 'none';
-            /* วิเคราะห์ใหม่เพื่ออัปเดต stat cards */
-            setTimeout(function() { runAnalyze(document.getElementById('analyzeBtn')); }, 600);
+            if (result.error) { alert('❌ ' + result.error); return; }
+            pdfState.extractedRows = result.rows || [];
+            renderPdfPreview(pdfState.extractedRows);
+            renderPdfStats(pdfState.extractedRows);
+            playNotificationSound();
           })
           .withFailureHandler(function(e) {
             toggleLoading(false); btn.disabled = false;
-            if (!handleError(e)) alert('อัปเดทล้มเหลว: ' + e.message);
+            if (!handleError(e)) alert('แปลง PDF ล้มเหลว: ' + e.message);
           })
-          .applyNewRows(SESSION_TOKEN, updateState.srcFileId, srcSheet, tgtFile, tgtSheet);
+          .extractPdfPromoData(SESSION_TOKEN, pdfState.base64, pageRange);
       }
 
-      /* บันทึก failed rows ไปยัง destination */
-      function sendFailedRows(btn) {
-        var data = updateState.analysis;
-        if (!data) return;
+      /* ===== PREVIEW TABLE (editable) ===== */
+      function renderPdfPreview(rows) {
+        var head = document.getElementById('pdfPreviewHead');
+        var body = document.getElementById('pdfPreviewBody');
+        head.innerHTML = ''; body.innerHTML = '';
 
-        var sendConflicts = document.getElementById('sendConflicts').checked;
-        var sendInvalids  = document.getElementById('sendInvalids').checked;
-        var destFileId    = document.getElementById('failedDestFile').value;
-        var destSheet     = document.getElementById('failedDestSheet').value.trim();
+        /* Header row */
+        var tr = document.createElement('tr');
+        var thCb = document.createElement('th');
+        thCb.style.cssText = 'width:30px;text-align:center;';
+        thCb.innerHTML = '<input type="checkbox" id="pdfSelectAll" onchange="toggleAllPdfRows(this)">';
+        tr.appendChild(thCb);
+        PDF_HEADERS.forEach(function(h) {
+          var th = document.createElement('th'); th.textContent = h; tr.appendChild(th);
+        });
+        head.appendChild(tr);
 
-        if (!destFileId) return alert('กรุณาเลือกไฟล์ปลายทาง');
-        if (!destSheet)  return alert('กรุณาระบุชื่อ Sheet ปลายทาง');
+        /* Data rows */
+        if (rows.length === 0) {
+          var emptyTr = document.createElement('tr');
+          var td = document.createElement('td');
+          td.colSpan = PDF_HEADERS.length + 1;
+          td.style.cssText = 'text-align:center;padding:30px;color:var(--text-secondary);';
+          td.textContent = 'ไม่พบข้อมูลโปรโมชั่นในหน้าที่เลือก';
+          emptyTr.appendChild(td); body.appendChild(emptyTr);
+        } else {
+          rows.forEach(function(row, idx) {
+            var tr = document.createElement('tr');
+            var tdCb = document.createElement('td');
+            tdCb.style.cssText = 'text-align:center;';
+            tdCb.innerHTML = '<input type="checkbox" class="pdf-row-cb" data-idx="' + idx + '">';
+            tr.appendChild(tdCb);
 
-        var rows = [];
-        if (sendConflicts) rows = rows.concat(data.conflicts);
-        if (sendInvalids)  rows = rows.concat(data.invalids);
-        if (rows.length === 0) return alert('ไม่มีแถวที่เลือกส่ง กรุณาเลือกประเภทแถวอย่างน้อย 1 ประเภท');
+            PDF_KEYS.forEach(function(key, ki) {
+              var td = document.createElement('td');
+              td.textContent = row[key] || '';
+              if (key === 'page') {
+                td.className = 'cell-page';
+              } else {
+                td.setAttribute('contenteditable', 'true');
+                td.setAttribute('data-key', key);
+                td.setAttribute('data-idx', idx);
+                /* อัปเดต state เมื่อ user แก้ไข */
+                td.addEventListener('blur', function() {
+                  pdfState.extractedRows[idx][key] = td.textContent.trim();
+                });
+              }
+              tr.appendChild(td);
+            });
+            body.appendChild(tr);
+          });
+        }
+
+        document.getElementById('pdfPreviewArea').style.display = 'block';
+        setTimeout(function() {
+          document.getElementById('pdfPreviewArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }
+
+      function renderPdfStats(rows) {
+        var area = document.getElementById('pdfStatsArea');
+        var cont = document.getElementById('pdfStatsContent');
+
+        /* นับจำนวนหน้าที่ไม่ซ้ำ */
+        var pages = {};
+        rows.forEach(function(r) { if (r.page) pages[r.page] = true; });
+
+        cont.innerHTML =
+          '<div class="pdf-stat" style="background:#eff6ff;color:#1d4ed8;">📝 <b>' + rows.length + '</b> แถว</div>' +
+          '<div class="pdf-stat" style="background:#ecfdf5;color:#065f46;">📄 <b>' + Object.keys(pages).length + '</b> หน้า</div>';
+
+        area.style.display = 'block';
+        document.getElementById('pdfSaveBtn').style.display = rows.length > 0 ? 'block' : 'none';
+      }
+
+      /* เพิ่มแถวว่าง */
+      function addPdfRow() {
+        var newRow = {};
+        PDF_KEYS.forEach(function(k) { newRow[k] = ''; });
+        pdfState.extractedRows.push(newRow);
+        renderPdfPreview(pdfState.extractedRows);
+        renderPdfStats(pdfState.extractedRows);
+      }
+
+      /* ลบแถวที่เลือก */
+      function deleteSelectedPdfRows() {
+        var cbs = document.querySelectorAll('.pdf-row-cb:checked');
+        if (cbs.length === 0) return alert('กรุณาเลือกแถวที่ต้องการลบ');
+        if (!confirm('ต้องการลบ ' + cbs.length + ' แถวที่เลือกหรือไม่?')) return;
+
+        var toDelete = {};
+        cbs.forEach(function(cb) { toDelete[cb.getAttribute('data-idx')] = true; });
+        pdfState.extractedRows = pdfState.extractedRows.filter(function(_, i) { return !toDelete[i]; });
+        renderPdfPreview(pdfState.extractedRows);
+        renderPdfStats(pdfState.extractedRows);
+      }
+
+      function toggleAllPdfRows(masterCb) {
+        document.querySelectorAll('.pdf-row-cb').forEach(function(cb) { cb.checked = masterCb.checked; });
+      }
+
+      /* ===== SAVE TO GOOGLE SHEET ===== */
+      function savePdfData(btn) {
+        var name = document.getElementById('pdfOutputName').value.trim();
+        if (!name) return alert('กรุณาระบุชื่อไฟล์');
+        if (pdfState.extractedRows.length === 0) return alert('ไม่มีข้อมูลที่จะบันทึก');
+
+        /* sync contenteditable → state (safety) */
+        document.querySelectorAll('#pdfPreviewBody td[contenteditable]').forEach(function(td) {
+          var idx = parseInt(td.getAttribute('data-idx'));
+          var key = td.getAttribute('data-key');
+          if (pdfState.extractedRows[idx]) pdfState.extractedRows[idx][key] = td.textContent.trim();
+        });
 
         btn.disabled = true;
-        toggleLoading(true, '💾 กำลังบันทึก failed rows...');
+        toggleLoading(true, '💾 กำลังบันทึกลง Google Sheet...');
 
         google.script.run
           .withSuccessHandler(function(r) {
             toggleLoading(false); btn.disabled = false;
             if (r.error) { alert('❌ ' + r.error); return; }
-            var res = document.getElementById('failedSendResult');
-            res.innerHTML = '✅ บันทึกสำเร็จ <b>' + r.saved + ' แถว</b> ไปยัง Sheet: <b>' + escapeHtml(destSheet) + '</b>';
-            if (r.url) {
-              res.innerHTML += ' &nbsp;<a href="' + r.url + '" target="_blank" ' +
-                'style="color:var(--accent);font-weight:600;text-decoration:none;">🔗 เปิดไฟล์</a>';
-            }
-            res.style.display = 'block';
+            document.getElementById('pdfResultMsg').textContent = r.message;
+            document.getElementById('pdfResultLink').href = r.url;
+            document.getElementById('pdfResultLink').textContent = '🔗 เปิด "' + r.fileName + '" ใน Google Sheets';
+            document.getElementById('pdfResultBanner').classList.add('visible');
+            playNotificationSound();
           })
           .withFailureHandler(function(e) {
             toggleLoading(false); btn.disabled = false;
             if (!handleError(e)) alert('บันทึกล้มเหลว: ' + e.message);
           })
-          .saveFailedRows(
-            SESSION_TOKEN,
-            JSON.stringify(rows),
-            destFileId,
-            destSheet,
-            JSON.stringify(data.srcHeaders || [])
-          );
+          .savePdfExtractedData(SESSION_TOKEN, JSON.stringify(pdfState.extractedRows), name);
       }
     </script>
   </body>

@@ -823,246 +823,149 @@ function getDiscoveryHeaders(token, configs) {
 }
 
 /* ==========================================
-   UPDATE ENGINE
+   PDF EXTRACT ENGINE
    ==========================================
-   - getUpdateFileList    : ดึงไฟล์จาก UPDATE_FOLDER_ID
-   - getCombinedFileList  : ดึงไฟล์จาก MAIN + TARGET (สำหรับ target picker)
-   - analyzeUpdateRows    : เปรียบเทียบ source vs target
-                            → duplicate / newRows / conflicts / invalids
-   - applyNewRows         : เพิ่มแถวใหม่เข้า target
-   - saveFailedRows       : บันทึก failed rows ไปยัง sheet ที่กำหนด
+   - extractPdfPromoData  : ส่ง PDF (base64) ให้ Gemini → สกัดข้อมูลโปรโมชั่น
+   - savePdfExtractedData : บันทึกข้อมูลที่ user ยืนยันแล้วลง Google Sheet
    ========================================== */
 
-function getUpdateFileList(token) {
-  requireAuth_(token);
-  var files = DriveApp.getFolderById(UPDATE_FOLDER_ID).getFilesByType(MimeType.GOOGLE_SHEETS);
-  var list  = [];
-  while (files.hasNext()) {
-    var f = files.next();
-    list.push({ name: f.getName(), id: f.getId() });
-  }
-  return list;
-}
+var PDF_OUTPUT_FOLDER_ID = "1vq3IEaIwJXwUGeQoDEOuVrl0OU64orJb";
 
-function getCombinedFileList(token) {
+/* Mapping จาก short key (Gemini JSON) → Template column */
+var PDF_FIELD_KEYS_ = [
+  "type","customer","brand","promo","detail",
+  "normalPrice","discount","extraDiscount","netPrice",
+  "mnpDiscount","advancePayment","campaign","contract",
+  "startDate","endDate"
+];
+
+/**
+ * extractPdfPromoData
+ * รับ PDF base64 + ช่วงหน้า → ส่ง Gemini → คืน array of rows
+ */
+function extractPdfPromoData(token, base64Data, pageRange) {
   requireAuth_(token);
-  var list = [], seen = {};
-  var addFromFolder = function(folderId) {
-    try {
-      var files = DriveApp.getFolderById(folderId).getFilesByType(MimeType.GOOGLE_SHEETS);
-      while (files.hasNext()) {
-        var f = files.next();
-        if (!seen[f.getId()]) { seen[f.getId()] = true; list.push({ name: f.getName(), id: f.getId() }); }
-      }
-    } catch(e) {}
+  var props  = PropertiesService.getScriptProperties();
+  var apiKey = props.getProperty('GEMINI_API_KEY');
+  if (!apiKey || !apiKey.trim()) return { error: "ไม่พบ GEMINI_API_KEY กรุณาตั้งค่าใน Script Properties" };
+
+  var pageInst = (!pageRange || pageRange === "all")
+    ? "ทุกหน้า"
+    : "เฉพาะหน้า " + pageRange + " เท่านั้น (ข้ามหน้าอื่น)";
+
+  var prompt =
+    'คุณคือ AI ที่เชี่ยวชาญการสกัดข้อมูลโปรโมชั่นจากเอกสาร PDF ของ True/dtac\n\n' +
+    'อ่าน PDF นี้ (' + pageInst + ') แล้วสกัดข้อมูลโปรโมชั่น/แพ็กเกจทั้งหมดที่พบในตาราง\n' +
+    'คืนผลเป็น JSON array โดยแต่ละ object มี key ดังนี้:\n\n' +
+    '- "type"           : ประเภท เช่น 2P, 4POTT, STL, FTTH\n' +
+    '- "customer"       : ประเภทลูกค้า เช่น ลูกค้าใหม่, ย้ายค่าย, ซิมรายเดือน\n' +
+    '- "brand"          : ชื่อแคมเปญหลัก เช่น True Fiber My Plan, Combo Max, Security\n' +
+    '- "promo"          : MKT Code หรือชื่อโปรโมชั่นเฉพาะ เช่น FTTS203-1000\n' +
+    '- "detail"         : รายละเอียด เช่น ความเร็ว, ซิมเน็ต, CCTV, ความบันเทิง, อุปกรณ์\n' +
+    '- "normalPrice"    : ราคาปกติก่อนลด (บาท/เดือน) ถ้ามี\n' +
+    '- "discount"       : ส่วนลดค่าเครื่องหรือส่วนลดค่าบริการ (บาท)\n' +
+    '- "extraDiscount"  : ส่วนลดเพิ่มเติมอื่นๆ\n' +
+    '- "netPrice"       : ราคาที่ลูกค้าจ่ายจริง (บาท/เดือน)\n' +
+    '- "mnpDiscount"    : ส่วนลดย้ายค่าย (บาท)\n' +
+    '- "advancePayment" : ค่าบริการเหมาจ่ายที่ชำระไว้ก่อน\n' +
+    '- "campaign"       : Campaign Name / Profile ที่ใช้ออกออเดอร์ เช่น Join us get more\n' +
+    '- "contract"       : ระยะสัญญา (เดือน) เช่น 12, 24\n' +
+    '- "startDate"      : วันเริ่มขาย (ถ้ามี)\n' +
+    '- "endDate"        : วันสิ้นสุด (ถ้ามี)\n' +
+    '- "page"           : หมายเลขหน้าใน PDF ที่ดึงข้อมูลมา\n\n' +
+    'กฎสำคัญ:\n' +
+    '- ถ้าข้อมูลไม่มีหรือไม่เกี่ยวข้อง ให้ใส่ "" (string ว่าง)\n' +
+    '- แต่ละ object = 1 รายการโปรโมชั่นที่แตกต่างกัน (ต่าง MKT Code / ต่างราคา / ต่างความเร็ว)\n' +
+    '- ถ้า 1 หน้ามีหลายแพ็กเกจ/หลายราคา ให้แยกเป็นหลาย object\n' +
+    '- ข้ามหน้าที่ไม่มีตารางโปรโมชั่น (หน้าปก, สารบัญ, ขั้นตอนการขาย, รูปภาพ, flow chart)\n' +
+    '- ตอบเป็น JSON array เท่านั้น ห้ามมี markdown, ห้ามมีข้อความอื่นนอก JSON';
+
+  var apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
+
+  var payload = {
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: "application/pdf", data: base64Data } }
+      ]
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json"
+    }
   };
-  addFromFolder(MAIN_FOLDER_ID);
-  addFromFolder(TARGET_FOLDER_ID);
-  return list;
+
+  try {
+    var res  = UrlFetchApp.fetch(apiUrl, {
+      method: "post", contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    var json = JSON.parse(res.getContentText());
+
+    if (res.getResponseCode() !== 200) {
+      return { error: "Gemini API error (HTTP " + res.getResponseCode() + "): " +
+               (json.error ? json.error.message : "ไม่ทราบสาเหตุ") };
+    }
+
+    var text = json.candidates[0].content.parts[0].text;
+    var rows = JSON.parse(text);
+    if (!Array.isArray(rows)) rows = [rows];
+    return { rows: rows, total: rows.length };
+  } catch(e) {
+    return { error: "แปลงผลลัพธ์ไม่สำเร็จ: " + e.message };
+  }
 }
 
 /**
- * analyzeUpdateRows
- * เปรียบเทียบ source sheet กับ target sheet แล้วแบ่งแถวออกเป็น 4 กลุ่ม:
- *   duplicate  — แถวที่เหมือนกันทุก col (ข้าม)
- *   newRows    — แถวใหม่ที่ยังไม่มีใน target (พร้อมเพิ่ม)
- *   conflicts  — มี key เดียวกัน (ชื่อโปรโมชั่น + แบรนด์) แต่ข้อมูลต่างกัน
- *   invalids   — ไม่มีข้อมูลใน key column
+ * savePdfExtractedData
+ * รับ JSON array (หลังจาก user แก้ไขใน preview) → สร้าง Google Sheet ใน PDF_OUTPUT_FOLDER_ID
  */
-function analyzeUpdateRows(token, srcFileId, srcSheetName, tgtFileId, tgtSheetName) {
+function savePdfExtractedData(token, rowsJson, newFileName) {
   requireAuth_(token);
   try {
-    var srcSS    = SpreadsheetApp.openById(srcFileId);
-    var srcSheet = srcSS.getSheetByName(srcSheetName);
-    if (!srcSheet) return { error: 'ไม่พบ Sheet ต้นฉบับ: ' + srcSheetName };
+    var rows = JSON.parse(rowsJson);
+    if (!rows || rows.length === 0) return { error: "ไม่มีข้อมูลที่จะบันทึก" };
+    if (!newFileName || !newFileName.trim()) return { error: "กรุณาระบุชื่อไฟล์" };
 
-    var srcLastRow = srcSheet.getLastRow();
-    var srcLastCol = srcSheet.getLastColumn();
-    if (srcLastRow < 2 || !srcLastCol)
-      return { duplicates: 0, newRowsCount: 0, conflicts: [], invalids: [], srcHeaders: [] };
+    var headers = TEMPLATE_HEADERS.slice();
 
-    var srcHeaders = srcSheet.getRange(1, 1, 1, srcLastCol).getDisplayValues()[0]
-                             .map(function(h){ return h.toString().trim(); });
-    var srcData    = srcSheet.getRange(2, 1, srcLastRow - 1, srcLastCol).getDisplayValues();
+    var newSS = SpreadsheetApp.create(newFileName.trim());
+    var dest  = DriveApp.getFolderById(PDF_OUTPUT_FOLDER_ID);
+    DriveApp.getFileById(newSS.getId()).moveTo(dest);
 
-    var tgtSS    = SpreadsheetApp.openById(tgtFileId);
-    var tgtSheet = tgtSS.getSheetByName(tgtSheetName);
-    if (!tgtSheet) return { error: 'ไม่พบ Sheet ปลายทาง: ' + tgtSheetName };
+    var sheet = newSS.getSheets()[0];
+    sheet.setName("Extracted_Data");
 
-    var tgtLastRow = tgtSheet.getLastRow();
-    var tgtLastCol = tgtSheet.getLastColumn();
-    var tgtData    = (tgtLastRow > 1 && tgtLastCol > 0)
-      ? tgtSheet.getRange(2, 1, tgtLastRow - 1, tgtLastCol).getDisplayValues() : [];
+    /* Header row */
+    sheet.getRange(1, 1, 1, headers.length)
+      .setValues([headers]).setFontWeight("bold")
+      .setBackground("#334155").setFontColor("#ffffff")
+      .setHorizontalAlignment("center").setVerticalAlignment("middle");
+    sheet.setFrozenRows(1);
 
-    /* Build exact-match set (ใช้ \x00 เป็น delimiter) */
-    var tgtRowSet = {};
-    tgtData.forEach(function(row) {
-      tgtRowSet[ row.map(function(v){ return (v||'').toString().trim(); }).join('\x00') ] = true;
+    /* Map short keys → template columns */
+    var dataRows = rows.map(function(row) {
+      return headers.map(function(h, idx) {
+        var key = PDF_FIELD_KEYS_[idx];
+        if (!key) return "";
+        var val = row[key];
+        return (val !== undefined && val !== null) ? val.toString() : "";
+      });
     });
 
-    /* หา index ของ key columns ใน source */
-    var KEY_COLS  = ['ชื่อโปรโมชั่น', 'แบรนด์และรุ่น'];
-    var srcKeyIdx = KEY_COLS.map(function(k) {
-      for (var i = 0; i < srcHeaders.length; i++) {
-        if (normalizeHeader_(srcHeaders[i]) === normalizeHeader_(k)) return i;
-      }
-      return -1;
-    });
+    if (dataRows.length > 0) {
+      sheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
+    }
 
-    /* Build partial-key set จาก target (เพื่อตรวจ conflict) */
-    var tgtKeySet = {};
-    tgtData.forEach(function(row) {
-      var pk = srcKeyIdx.map(function(ki){
-        return ki >= 0 && ki < row.length ? (row[ki]||'').toString().trim() : '';
-      }).join('\x00');
-      if (pk.replace(/\x00/g,'').trim()) tgtKeySet[pk] = true;
-    });
-
-    var duplicates = 0, newRowsCount = 0, conflicts = [], invalids = [];
-    var MAX_REPORT = 200;
-
-    srcData.forEach(function(row, idx) {
-      var allEmpty = row.every(function(v){ return !v || !v.toString().trim(); });
-      if (allEmpty) return;
-
-      var fullKey = row.map(function(v){ return (v||'').toString().trim(); }).join('\x00');
-      var pk      = srcKeyIdx.map(function(ki){
-        return ki >= 0 && ki < row.length ? (row[ki]||'').toString().trim() : '';
-      }).join('\x00');
-      var hasKey  = srcKeyIdx.some(function(ki){ return ki >= 0 && row[ki] && row[ki].toString().trim(); });
-
-      if (tgtRowSet[fullKey]) {
-        duplicates++;
-      } else if (!hasKey) {
-        if (invalids.length < MAX_REPORT)
-          invalids.push({ rowNum: idx + 2, data: row.map(function(v){ return (v||'').toString(); }),
-                          reason: 'ไม่มีข้อมูลหลัก (ชื่อโปรโมชั่น / แบรนด์และรุ่น)' });
-      } else if (tgtKeySet[pk]) {
-        if (conflicts.length < MAX_REPORT)
-          conflicts.push({ rowNum: idx + 2, data: row.map(function(v){ return (v||'').toString(); }),
-                           reason: 'มีข้อมูลหลักซ้ำแต่รายละเอียดต่างกัน' });
-      } else {
-        newRowsCount++;
-      }
-    });
+    sheet.autoResizeColumns(1, headers.length);
 
     return {
-      duplicates:   duplicates,
-      newRowsCount: newRowsCount,
-      conflicts:    conflicts,
-      invalids:     invalids,
-      srcHeaders:   srcHeaders
+      message:  "บันทึกสำเร็จ: " + dataRows.length + " แถว | ไฟล์: " + newFileName,
+      url:      newSS.getUrl(),
+      fileName: newFileName,
+      rows:     dataRows.length
     };
-  } catch(e) { return { error: e.message }; }
-}
-
-/**
- * applyNewRows — เพิ่มเฉพาะแถวที่เป็น "new" เข้า target sheet
- */
-function applyNewRows(token, srcFileId, srcSheetName, tgtFileId, tgtSheetName) {
-  requireAuth_(token);
-  try {
-    var srcSS    = SpreadsheetApp.openById(srcFileId);
-    var srcSheet = srcSS.getSheetByName(srcSheetName);
-    var tgtSS    = SpreadsheetApp.openById(tgtFileId);
-    var tgtSheet = tgtSS.getSheetByName(tgtSheetName);
-
-    var srcLastRow = srcSheet.getLastRow();
-    var srcLastCol = srcSheet.getLastColumn();
-    if (srcLastRow < 2 || !srcLastCol) return { added: 0 };
-
-    var srcHeaders = srcSheet.getRange(1, 1, 1, srcLastCol).getDisplayValues()[0];
-    var srcData    = srcSheet.getRange(2, 1, srcLastRow - 1, srcLastCol).getDisplayValues();
-
-    var tgtLastRow = tgtSheet.getLastRow();
-    var tgtLastCol = tgtSheet.getLastColumn();
-    var tgtData    = (tgtLastRow > 1 && tgtLastCol > 0)
-      ? tgtSheet.getRange(2, 1, tgtLastRow - 1, tgtLastCol).getDisplayValues() : [];
-
-    var tgtRowSet = {};
-    tgtData.forEach(function(row) {
-      tgtRowSet[ row.map(function(v){ return (v||'').toString().trim(); }).join('\x00') ] = true;
-    });
-
-    var KEY_COLS  = ['ชื่อโปรโมชั่น', 'แบรนด์และรุ่น'];
-    var srcKeyIdx = KEY_COLS.map(function(k) {
-      for (var i = 0; i < srcHeaders.length; i++) {
-        if (normalizeHeader_(srcHeaders[i]) === normalizeHeader_(k)) return i;
-      }
-      return -1;
-    });
-
-    var tgtKeySet = {};
-    tgtData.forEach(function(row) {
-      var pk = srcKeyIdx.map(function(ki){
-        return ki >= 0 && ki < row.length ? (row[ki]||'').toString().trim() : '';
-      }).join('\x00');
-      if (pk.replace(/\x00/g,'').trim()) tgtKeySet[pk] = true;
-    });
-
-    var toAdd = [];
-    srcData.forEach(function(row) {
-      var allEmpty = row.every(function(v){ return !v || !v.toString().trim(); });
-      if (allEmpty) return;
-
-      var fullKey = row.map(function(v){ return (v||'').toString().trim(); }).join('\x00');
-      if (tgtRowSet[fullKey]) return;
-
-      var pk     = srcKeyIdx.map(function(ki){
-        return ki >= 0 && ki < row.length ? (row[ki]||'').toString().trim() : '';
-      }).join('\x00');
-      var hasKey = srcKeyIdx.some(function(ki){ return ki >= 0 && row[ki] && row[ki].toString().trim(); });
-
-      if (tgtKeySet[pk] || !hasKey) return;
-      toAdd.push(row);
-    });
-
-    if (toAdd.length === 0) return { added: 0 };
-
-    /* เพิ่ม header row ถ้า target ว่างเปล่า */
-    if (tgtLastRow === 0) {
-      tgtSheet.appendRow(srcHeaders);
-      tgtLastRow = 1;
-    }
-
-    /* Batch setValues แทน appendRow ทีละแถว */
-    tgtSheet.getRange(tgtSheet.getLastRow() + 1, 1, toAdd.length, srcLastCol).setValues(toAdd);
-
-    return { added: toAdd.length };
-  } catch(e) { return { error: e.message }; }
-}
-
-/**
- * saveFailedRows — บันทึก conflict/invalid rows ไปยัง sheet ที่กำหนด
- * สร้าง sheet ใหม่ถ้ายังไม่มี, เพิ่ม header row อัตโนมัติ
- */
-function saveFailedRows(token, failedRowsJson, destFileId, destSheetName, headersJson) {
-  requireAuth_(token);
-  try {
-    var rows    = JSON.parse(failedRowsJson);
-    var headers = JSON.parse(headersJson || '[]');
-    if (!rows || rows.length === 0) return { saved: 0 };
-
-    var ss    = SpreadsheetApp.openById(destFileId);
-    var sheet = ss.getSheetByName(destSheetName);
-    if (!sheet) sheet = ss.insertSheet(destSheetName);
-
-    if (sheet.getLastRow() === 0 && headers.length > 0) {
-      var hdrs = headers.concat(['เหตุผลที่ไม่ได้อัปเดท', 'แถวต้นฉบับ (Row#)']);
-      sheet.appendRow(hdrs);
-      sheet.getRange(1, 1, 1, hdrs.length)
-           .setFontWeight('bold').setBackground('#334155').setFontColor('#ffffff');
-      sheet.setFrozenRows(1);
-    }
-
-    var rowsToWrite = rows.map(function(r) {
-      return r.data.concat([ r.reason || '', 'Row ' + (r.rowNum || '') ]);
-    });
-
-    var startRow = sheet.getLastRow() + 1;
-    var colCount = rowsToWrite[0].length;
-    sheet.getRange(startRow, 1, rowsToWrite.length, colCount).setValues(rowsToWrite);
-
-    return { saved: rows.length, url: ss.getUrl() };
-  } catch(e) { return { error: e.message }; }
+  } catch(e) { return { error: "บันทึกล้มเหลว: " + e.message }; }
 }
