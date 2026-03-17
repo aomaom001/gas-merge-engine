@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/ratch/OneDrive/Desktop/**)",
+      "Bash(python -c \":*)",
+      "Bash(pip show:*)",
+      "Bash(pip install:*)",
+      "Bash(python -u -c \":*)"
+    ]
+  }
+}
