@@ -825,7 +825,9 @@ function getDiscoveryHeaders(token, configs) {
 /* ==========================================
    PDF EXTRACT ENGINE
    ==========================================
-   - extractPdfPromoData  : ส่ง PDF (base64) ให้ Gemini → สกัดข้อมูลโปรโมชั่น
+   Step 1: OCR.space  → แปลง PDF เป็น text (ฟรี 500 req/วัน)
+   Step 2: Gemini     → แปลง text เป็น structured JSON
+   Fallback: ส่ง PDF ตรงไป Gemini ถ้า OCR ล้มเหลว
    - savePdfExtractedData : บันทึกข้อมูลที่ user ยืนยันแล้วลง Google Sheet
    ========================================== */
 
@@ -839,23 +841,77 @@ var PDF_FIELD_KEYS_ = [
   "startDate","endDate"
 ];
 
-/**
- * extractPdfPromoData
- * รับ PDF base64 + ช่วงหน้า → ส่ง Gemini → คืน array of rows
- */
-function extractPdfPromoData(token, base64Data, pageRange) {
-  requireAuth_(token);
-  var props  = PropertiesService.getScriptProperties();
-  var apiKey = props.getProperty('GEMINI_API_KEY');
-  if (!apiKey || !apiKey.trim()) return { error: "ไม่พบ GEMINI_API_KEY กรุณาตั้งค่าใน Script Properties" };
+/* ── OCR.space helper (single JPEG image) ── */
+function ocrImagePage_(base64Data, ocrKey) {
+  var url = "https://api.ocr.space/parse/image";
+  var res = UrlFetchApp.fetch(url, {
+    method: "post",
+    payload: {
+      base64Image:       "data:image/jpeg;base64," + base64Data,
+      apikey:            ocrKey,
+      language:          "tha",
+      isOverlayRequired: "false",
+      filetype:          "JPG",
+      OCREngine:         "2",
+      scale:             "true",
+      isTable:           "true"
+    },
+    muteHttpExceptions: true
+  });
 
+  var code = res.getResponseCode();
+  var json = JSON.parse(res.getContentText());
+
+  if (code !== 200) return { error: "OCR.space HTTP " + code };
+  if (json.IsErroredOnProcessing) return { error: (json.ErrorMessage || JSON.stringify(json.ErrorDetails)) };
+  if (!json.ParsedResults || json.ParsedResults.length === 0) return { error: "ไม่พบข้อความ" };
+
+  return { text: json.ParsedResults[0].ParsedText || "" };
+}
+
+/* ── OCR.space helper (full PDF — legacy) ── */
+function ocrPdfPages_(base64Data, ocrKey) {
+  var url = "https://api.ocr.space/parse/image";
+  var res = UrlFetchApp.fetch(url, {
+    method: "post",
+    payload: {
+      base64Image:       "data:application/pdf;base64," + base64Data,
+      apikey:            ocrKey,
+      language:          "tha",          // ภาษาไทย
+      isOverlayRequired: "false",
+      filetype:          "PDF",
+      OCREngine:         "2",            // Engine 2 รองรับภาษาไทยดีกว่า
+      scale:             "true",
+      isTable:           "true"          // รักษาโครงสร้างตาราง
+    },
+    muteHttpExceptions: true
+  });
+
+  var code = res.getResponseCode();
+  var json = JSON.parse(res.getContentText());
+
+  if (code !== 200) return { error: "OCR.space HTTP " + code };
+  if (json.IsErroredOnProcessing) return { error: "OCR error: " + (json.ErrorMessage || JSON.stringify(json.ErrorDetails)) };
+  if (!json.ParsedResults || json.ParsedResults.length === 0) return { error: "OCR ไม่พบข้อความใน PDF" };
+
+  // รวม text ทุกหน้า พร้อมระบุเลขหน้า
+  var allText = "";
+  for (var i = 0; i < json.ParsedResults.length; i++) {
+    allText += "\n=== หน้า " + (i + 1) + " ===\n" + (json.ParsedResults[i].ParsedText || "");
+  }
+  return { text: allText.trim(), pages: json.ParsedResults.length };
+}
+
+/* ── Gemini: text → structured JSON ── */
+function geminiTextToPromo_(apiKey, ocrText, pageRange) {
   var pageInst = (!pageRange || pageRange === "all")
     ? "ทุกหน้า"
     : "เฉพาะหน้า " + pageRange + " เท่านั้น (ข้ามหน้าอื่น)";
 
   var prompt =
     'คุณคือ AI ที่เชี่ยวชาญการสกัดข้อมูลโปรโมชั่นจากเอกสาร PDF ของ True/dtac\n\n' +
-    'อ่าน PDF นี้ (' + pageInst + ') แล้วสกัดข้อมูลโปรโมชั่น/แพ็กเกจทั้งหมดที่พบในตาราง\n' +
+    'ข้อความด้านล่างนี้ถูก OCR มาจาก PDF (' + pageInst + ')\n' +
+    'สกัดข้อมูลโปรโมชั่น/แพ็กเกจทั้งหมดที่พบในตาราง\n' +
     'คืนผลเป็น JSON array โดยแต่ละ object มี key ดังนี้:\n\n' +
     '- "type"           : ประเภท เช่น 2P, 4POTT, STL, FTTH\n' +
     '- "customer"       : ประเภทลูกค้า เช่น ลูกค้าใหม่, ย้ายค่าย, ซิมรายเดือน\n' +
@@ -878,44 +934,188 @@ function extractPdfPromoData(token, base64Data, pageRange) {
     '- แต่ละ object = 1 รายการโปรโมชั่นที่แตกต่างกัน (ต่าง MKT Code / ต่างราคา / ต่างความเร็ว)\n' +
     '- ถ้า 1 หน้ามีหลายแพ็กเกจ/หลายราคา ให้แยกเป็นหลาย object\n' +
     '- ข้ามหน้าที่ไม่มีตารางโปรโมชั่น (หน้าปก, สารบัญ, ขั้นตอนการขาย, รูปภาพ, flow chart)\n' +
-    '- ตอบเป็น JSON array เท่านั้น ห้ามมี markdown, ห้ามมีข้อความอื่นนอก JSON';
+    '- ตอบเป็น JSON array เท่านั้น ห้ามมี markdown, ห้ามมีข้อความอื่นนอก JSON\n\n' +
+    '=== OCR TEXT ===\n' + ocrText;
 
-  var apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
+  // ลอง model ทีละตัว
+  var models = [
+    { name: "gemini-2.0-flash",      ver: "v1beta" },
+    { name: "gemini-2.0-flash-lite", ver: "v1beta" },
+    { name: "gemini-1.5-flash",      ver: "v1" }
+  ];
+
+  var lastError = "";
+  for (var m = 0; m < models.length; m++) {
+    var mdl = models[m];
+    var apiUrl = "https://generativelanguage.googleapis.com/" + mdl.ver +
+                 "/models/" + mdl.name + ":generateContent?key=" + apiKey;
+
+    var genConfig = { temperature: 0.1, maxOutputTokens: 8192 };
+    if (mdl.ver === "v1beta") genConfig.responseMimeType = "application/json";
+
+    var payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: genConfig
+    };
+
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        var res = UrlFetchApp.fetch(apiUrl, {
+          method: "post", contentType: "application/json",
+          payload: JSON.stringify(payload),
+          muteHttpExceptions: true
+        });
+        var code = res.getResponseCode();
+        var json = JSON.parse(res.getContentText());
+
+        if (code === 200) {
+          var text = json.candidates[0].content.parts[0].text;
+          text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+          var rows = JSON.parse(text);
+          if (!Array.isArray(rows)) rows = [rows];
+          return { rows: rows, total: rows.length, model: mdl.name, method: "OCR+Gemini" };
+        }
+        if (code === 429 || code === 404) {
+          lastError = "HTTP " + code + " สำหรับ " + mdl.name;
+          if (code === 429 && attempt < 2) { Utilities.sleep(5000); continue; }
+          break;
+        }
+        return { error: "Gemini error (HTTP " + code + ") [" + mdl.name + "]: " +
+                 (json.error ? json.error.message : "ไม่ทราบสาเหตุ") };
+      } catch(e) {
+        lastError = e.message;
+        if (attempt < 2) { Utilities.sleep(3000); continue; }
+        break;
+      }
+    }
+  }
+  return { error: "Gemini ล้มเหลวทุก model: " + lastError };
+}
+
+/* ── Fallback: ส่ง PDF ตรงไป Gemini (ใช้ token เยอะ) ── */
+function geminiFallbackPdf_(apiKey, base64Data, pageRange) {
+  var pageInst = (!pageRange || pageRange === "all")
+    ? "ทุกหน้า"
+    : "เฉพาะหน้า " + pageRange + " เท่านั้น (ข้ามหน้าอื่น)";
+
+  var prompt =
+    'คุณคือ AI ที่เชี่ยวชาญการสกัดข้อมูลโปรโมชั่นจากเอกสาร PDF ของ True/dtac\n\n' +
+    'อ่าน PDF นี้ (' + pageInst + ') แล้วสกัดข้อมูลโปรโมชั่น/แพ็กเกจทั้งหมดที่พบในตาราง\n' +
+    'คืนผลเป็น JSON array โดยแต่ละ object มี key ดังนี้:\n\n' +
+    '- "type","customer","brand","promo","detail","normalPrice","discount",' +
+    '"extraDiscount","netPrice","mnpDiscount","advancePayment","campaign",' +
+    '"contract","startDate","endDate","page"\n\n' +
+    'กฎ: ถ้าไม่มีข้อมูลใส่ "" | แต่ละ object = 1 โปรโมชั่น | ข้ามหน้าที่ไม่มีตาราง | ตอบ JSON array เท่านั้น';
+
+  var mdl = { name: "gemini-2.0-flash", ver: "v1beta" };
+  var apiUrl = "https://generativelanguage.googleapis.com/" + mdl.ver +
+               "/models/" + mdl.name + ":generateContent?key=" + apiKey;
 
   var payload = {
-    contents: [{
-      parts: [
-        { text: prompt },
-        { inline_data: { mime_type: "application/pdf", data: base64Data } }
-      ]
-    }],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: 8192,
-      responseMimeType: "application/json"
-    }
+    contents: [{ parts: [
+      { text: prompt },
+      { inline_data: { mime_type: "application/pdf", data: base64Data } }
+    ]}],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: "application/json" }
   };
 
   try {
-    var res  = UrlFetchApp.fetch(apiUrl, {
+    var res = UrlFetchApp.fetch(apiUrl, {
       method: "post", contentType: "application/json",
       payload: JSON.stringify(payload),
       muteHttpExceptions: true
     });
+    var code = res.getResponseCode();
     var json = JSON.parse(res.getContentText());
-
-    if (res.getResponseCode() !== 200) {
-      return { error: "Gemini API error (HTTP " + res.getResponseCode() + "): " +
-               (json.error ? json.error.message : "ไม่ทราบสาเหตุ") };
+    if (code === 200) {
+      var text = json.candidates[0].content.parts[0].text;
+      text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+      var rows = JSON.parse(text);
+      if (!Array.isArray(rows)) rows = [rows];
+      return { rows: rows, total: rows.length, model: mdl.name, method: "DirectPDF" };
     }
-
-    var text = json.candidates[0].content.parts[0].text;
-    var rows = JSON.parse(text);
-    if (!Array.isArray(rows)) rows = [rows];
-    return { rows: rows, total: rows.length };
+    return { error: "Fallback Gemini error (HTTP " + code + "): " + (json.error ? json.error.message : "") };
   } catch(e) {
-    return { error: "แปลงผลลัพธ์ไม่สำเร็จ: " + e.message };
+    return { error: "Fallback error: " + e.message };
   }
+}
+
+/**
+ * extractPdfPromoData  (Main entry)
+ * Strategy: OCR.space → text → Gemini  |  Fallback: PDF ตรงไป Gemini
+ */
+function extractPdfPromoData(token, base64Data, pageRange) {
+  requireAuth_(token);
+  var props  = PropertiesService.getScriptProperties();
+  var apiKey = props.getProperty('GEMINI_API_KEY');
+  if (!apiKey || !apiKey.trim()) return { error: "ไม่พบ GEMINI_API_KEY กรุณาตั้งค่าใน Script Properties" };
+
+  var ocrKey = props.getProperty('OCR_API_KEY') || 'helloworld';   // free demo key
+
+  // ── Step 1: OCR.space ──
+  try {
+    var ocr = ocrPdfPages_(base64Data, ocrKey);
+    if (!ocr.error && ocr.text && ocr.text.length > 50) {
+      // ── Step 2: Gemini text-only ──
+      var result = geminiTextToPromo_(apiKey, ocr.text, pageRange);
+      if (!result.error) {
+        result.ocrPages = ocr.pages;
+        return result;
+      }
+      // Gemini ล้มเหลว → ลอง fallback
+    }
+  } catch(e) { /* OCR failed, continue to fallback */ }
+
+  // ── Fallback: ส่ง PDF ตรงไป Gemini ──
+  return geminiFallbackPdf_(apiKey, base64Data, pageRange);
+}
+
+/**
+ * extractPdfPageImages  (New — receives page images from client pdf.js)
+ * images = [{ pageNum: 3, base64: "..." }, { pageNum: 4, base64: "..." }]
+ */
+function extractPdfPageImages(token, images, pageRange) {
+  requireAuth_(token);
+  var props  = PropertiesService.getScriptProperties();
+  var apiKey = props.getProperty('GEMINI_API_KEY');
+  if (!apiKey || !apiKey.trim()) return { error: "ไม่พบ GEMINI_API_KEY กรุณาตั้งค่าใน Script Properties" };
+
+  var ocrKey = props.getProperty('OCR_API_KEY') || 'helloworld';
+
+  if (!images || images.length === 0) return { error: "ไม่ได้รับรูปภาพจาก PDF" };
+
+  // OCR each page image individually via OCR.space
+  var allText   = "";
+  var ocrErrors = [];
+
+  for (var i = 0; i < images.length; i++) {
+    var img = images[i];
+    try {
+      var ocrResult = ocrImagePage_(img.base64, ocrKey);
+      if (ocrResult.error) {
+        ocrErrors.push("หน้า " + img.pageNum + ": " + ocrResult.error);
+      } else if (ocrResult.text) {
+        allText += "\n=== หน้า " + img.pageNum + " ===\n" + ocrResult.text;
+      }
+    } catch(e) {
+      ocrErrors.push("หน้า " + img.pageNum + ": " + e.message);
+    }
+    // หน่วงเล็กน้อยระหว่าง request เพื่อไม่ให้โดน rate-limit
+    if (i < images.length - 1) Utilities.sleep(500);
+  }
+
+  if (!allText || allText.trim().length < 30) {
+    return { error: "OCR ไม่สามารถอ่านข้อความจากรูปภาพได้\n" + ocrErrors.join("\n") };
+  }
+
+  // ส่ง OCR text ไป Gemini เพื่อแปลงเป็น structured JSON
+  var result = geminiTextToPromo_(apiKey, allText.trim(), pageRange);
+  if (result.error) return result;
+
+  result.ocrPages  = images.length;
+  result.ocrErrors = ocrErrors;
+  result.method    = "OCR+Gemini (Images)";
+  return result;
 }
 
 /**

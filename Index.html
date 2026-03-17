@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
     <style>
       :root {
         --bg-dark:#0f172a;--bg-sidebar:#1e293b;--bg-card:#ffffff;--bg-page:#f1f5f9;
@@ -1820,6 +1822,7 @@
       /* PDF state */
       var pdfState = {
         base64: null,
+        file: null,           // raw File object for pdf.js
         fileName: '',
         extractedRows: []   // array of {type,customer,brand,...,page}
       };
@@ -1863,6 +1866,7 @@
         if (file.size > 20 * 1024 * 1024) { alert('ไฟล์ใหญ่เกินไป (สูงสุด 20 MB)'); input.value = ''; return; }
 
         pdfState.fileName = file.name;
+        pdfState.file = file;   // เก็บ File object สำหรับ pdf.js
         document.getElementById('pdfFileName').textContent = file.name;
         document.getElementById('pdfFileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
         document.getElementById('pdfDropZone').style.display = 'none';
@@ -1883,7 +1887,7 @@
       }
 
       function clearPdfFile() {
-        pdfState.base64 = null; pdfState.fileName = ''; pdfState.extractedRows = [];
+        pdfState.base64 = null; pdfState.file = null; pdfState.fileName = ''; pdfState.extractedRows = [];
         document.getElementById('pdfFileInput').value = '';
         document.getElementById('pdfDropZone').style.display = 'flex';
         document.getElementById('pdfFileInfo').style.display = 'none';
@@ -1894,28 +1898,132 @@
         document.getElementById('pdfResultBanner').classList.remove('visible');
       }
 
-      /* ===== AI EXTRACT ===== */
+      /* ===== PAGE RANGE PARSER ===== */
+      function parsePageRange(rangeStr, totalPages) {
+        if (!rangeStr || rangeStr.trim().toLowerCase() === 'all') {
+          var all = [];
+          for (var i = 1; i <= totalPages; i++) all.push(i);
+          return all;
+        }
+        var pages = [];
+        var parts = rangeStr.split(',');
+        for (var p = 0; p < parts.length; p++) {
+          var part = parts[p].trim();
+          var match = part.match(/^(\d+)\s*-\s*(\d+)$/);
+          if (match) {
+            var start = parseInt(match[1]);
+            var end   = parseInt(match[2]);
+            for (var i = start; i <= Math.min(end, totalPages); i++) {
+              if (i >= 1 && pages.indexOf(i) === -1) pages.push(i);
+            }
+          } else {
+            var num = parseInt(part);
+            if (num >= 1 && num <= totalPages && pages.indexOf(num) === -1) pages.push(num);
+          }
+        }
+        pages.sort(function(a, b) { return a - b; });
+        return pages;
+      }
+
+      /* ===== PDF → IMAGES via pdf.js ===== */
+      function renderPdfPagesToImages(file, pageNumbers, onProgress) {
+        return new Promise(function(resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function(e) {
+            var typedArray = new Uint8Array(e.target.result);
+            pdfjsLib.getDocument({ data: typedArray }).promise.then(function(pdf) {
+              var images = [];
+              var canvas = document.createElement('canvas');
+              var ctx    = canvas.getContext('2d');
+              var chain  = Promise.resolve();
+
+              pageNumbers.forEach(function(pageNum, idx) {
+                chain = chain.then(function() {
+                  if (onProgress) onProgress(idx + 1, pageNumbers.length, pageNum);
+                  return pdf.getPage(pageNum).then(function(page) {
+                    var scale    = 2.0;
+                    var viewport = page.getViewport({ scale: scale });
+                    canvas.width  = viewport.width;
+                    canvas.height = viewport.height;
+                    return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function() {
+                      var jpegB64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+                      images.push({ pageNum: pageNum, base64: jpegB64 });
+                    });
+                  });
+                });
+              });
+
+              chain.then(function() { resolve(images); })
+                   .catch(function(err) { reject(err); });
+            }).catch(function(err) { reject(err); });
+          };
+          reader.onerror = function() { reject(new Error('ไม่สามารถอ่านไฟล์ PDF')); };
+          reader.readAsArrayBuffer(file);
+        });
+      }
+
+      /* ===== AI EXTRACT (pdf.js → OCR.space → Gemini) ===== */
       function startPdfExtract(btn) {
-        if (!pdfState.base64) return alert('กรุณาอัพโหลดไฟล์ PDF ก่อน');
+        if (!pdfState.file) return alert('กรุณาอัพโหลดไฟล์ PDF ก่อน');
         var pageRange = document.getElementById('pdfPageRange').value.trim() || 'all';
 
         btn.disabled = true;
-        toggleLoading(true, '🤖 AI กำลังอ่าน PDF และสกัดข้อมูลโปรโมชั่น...\nอาจใช้เวลา 15-60 วินาที');
+        toggleLoading(true, '📄 กำลังอ่าน PDF ด้วย pdf.js...');
 
-        google.script.run
-          .withSuccessHandler(function(result) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var typedArray = new Uint8Array(e.target.result);
+          pdfjsLib.getDocument({ data: typedArray }).promise.then(function(pdf) {
+            var totalPages = pdf.numPages;
+            var pageNums   = parsePageRange(pageRange, totalPages);
+
+            if (pageNums.length === 0) {
+              toggleLoading(false); btn.disabled = false;
+              alert('ไม่มีหน้าที่ตรงกับช่วงที่ระบุ (PDF มี ' + totalPages + ' หน้า)');
+              return;
+            }
+            if (pageNums.length > 30) {
+              toggleLoading(false); btn.disabled = false;
+              alert('เลือกได้สูงสุด 30 หน้าต่อครั้ง (เลือก ' + pageNums.length + ' หน้า)\nกรุณาระบุช่วงหน้าให้แคบลง');
+              return;
+            }
+
+            toggleLoading(true, '🖼️ กำลังแปลง PDF เป็นรูปภาพ... (0/' + pageNums.length + ')');
+
+            renderPdfPagesToImages(pdfState.file, pageNums, function(current, total, pageNum) {
+              toggleLoading(true, '🖼️ กำลังแปลงหน้า ' + pageNum + ' เป็นรูปภาพ... (' + current + '/' + total + ')');
+            }).then(function(images) {
+              toggleLoading(true, '🤖 OCR.space กำลังอ่านข้อความ + Gemini สกัดข้อมูล...\n' +
+                images.length + ' หน้า | อาจใช้เวลา 15-60 วินาที');
+
+              google.script.run
+                .withSuccessHandler(function(result) {
+                  toggleLoading(false); btn.disabled = false;
+                  if (result.error) { alert('❌ ' + result.error); return; }
+                  pdfState.extractedRows = result.rows || [];
+                  renderPdfPreview(pdfState.extractedRows);
+                  renderPdfStats(pdfState.extractedRows);
+                  var info = '✅ สกัดได้ ' + result.total + ' รายการ | วิธี: ' + (result.method || 'OCR+Gemini') +
+                             ' | Model: ' + (result.model || '-') + ' | OCR ' + images.length + ' หน้า';
+                  document.getElementById('pdfStats').insertAdjacentHTML('afterbegin',
+                    '<div style="background:#065f46;color:#6ee7b7;padding:8px 12px;border-radius:8px;margin-bottom:10px;font-size:13px">' + info + '</div>');
+                  playNotificationSound();
+                })
+                .withFailureHandler(function(e) {
+                  toggleLoading(false); btn.disabled = false;
+                  if (!handleError(e)) alert('แปลง PDF ล้มเหลว: ' + e.message);
+                })
+                .extractPdfPageImages(SESSION_TOKEN, images, pageRange);
+            }).catch(function(err) {
+              toggleLoading(false); btn.disabled = false;
+              alert('แปลง PDF เป็นรูปภาพล้มเหลว: ' + err.message);
+            });
+          }).catch(function(err) {
             toggleLoading(false); btn.disabled = false;
-            if (result.error) { alert('❌ ' + result.error); return; }
-            pdfState.extractedRows = result.rows || [];
-            renderPdfPreview(pdfState.extractedRows);
-            renderPdfStats(pdfState.extractedRows);
-            playNotificationSound();
-          })
-          .withFailureHandler(function(e) {
-            toggleLoading(false); btn.disabled = false;
-            if (!handleError(e)) alert('แปลง PDF ล้มเหลว: ' + e.message);
-          })
-          .extractPdfPromoData(SESSION_TOKEN, pdfState.base64, pageRange);
+            alert('ไม่สามารถอ่านไฟล์ PDF: ' + err.message);
+          });
+        };
+        reader.readAsArrayBuffer(pdfState.file);
       }
 
       /* ===== PREVIEW TABLE (editable) ===== */
