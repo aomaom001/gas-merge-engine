@@ -392,78 +392,220 @@ function deleteMappingProfile(token, profileName) {
 }
 
 /* ==========================================
-   STRIKETHROUGH DETECTION — ใช้ Sheets API v4
-   ต้องเปิด Advanced Service: Google Sheets API (ชื่อ "Sheets")
+   PARALLEL DATA READER — UrlFetchApp.fetchAll()
+   อ่านข้อมูลทุกไฟล์พร้อมกัน เร็วกว่า sequential 5-10x
    ========================================== */
 
-/**
- * colToA1_ — แปลง column index (1-based) เป็น A1 notation letter
- */
 function colToA1_(col) {
   var s = "";
-  while (col > 0) {
-    col--;
-    s = String.fromCharCode(65 + (col % 26)) + s;
-    col = Math.floor(col / 26);
-  }
+  while (col > 0) { col--; s = String.fromCharCode(65 + (col % 26)) + s; col = Math.floor(col / 26); }
   return s;
 }
 
 /**
- * getStrikeRowSet_ — ใช้ Sheets API v4 อ่าน effectiveFormat.textFormat.strikethrough
- * คืน object { 0: true, 3: true, ... } สำหรับ row ที่มี strikethrough (0-based relative to data start)
+ * buildSheetsApiUrl_ — สร้าง URL สำหรับ Sheets API v4
  */
-function getStrikeRowSet_(spreadsheetId, sheetName, dataStartRow, dataEndRow, colCount) {
-  var strikeSet = {};
-  try {
-    var safeSheet = "'" + sheetName.replace(/'/g, "''") + "'";
-    var lastColLetter = colToA1_(colCount);
-    var a1 = safeSheet + "!A" + dataStartRow + ":" + lastColLetter + dataEndRow;
-
-    var resp = Sheets.Spreadsheets.get(spreadsheetId, {
-      ranges: [a1],
-      fields: "sheets.data.rowData.values.effectiveFormat.textFormat.strikethrough"
-    });
-
-    var sheetData = resp.sheets && resp.sheets[0] && resp.sheets[0].data && resp.sheets[0].data[0];
-    if (!sheetData || !sheetData.rowData) return strikeSet;
-    var rowData = sheetData.rowData;
-
-    for (var r = 0; r < rowData.length; r++) {
-      if (!rowData[r] || !rowData[r].values) continue;
-      var cells = rowData[r].values;
-      for (var c = 0; c < cells.length; c++) {
-        if (cells[c] &&
-            cells[c].effectiveFormat &&
-            cells[c].effectiveFormat.textFormat &&
-            cells[c].effectiveFormat.textFormat.strikethrough === true) {
-          strikeSet[r] = true;
-          break;  // พบ strikethrough ใน row นี้แล้ว ไม่ต้องเช็ค col ถัดไป
-        }
-      }
-    }
-  } catch (e) {
-    console.error("getStrikeRowSet_ error: " + e.message);
-    // fallback: ลองใช้ getFontLines แบบเดิม (ถ้า Sheets API ยังไม่เปิด)
-  }
-  return strikeSet;
+function buildSheetsApiUrl_(spreadsheetId, range, fields) {
+  var url = "https://sheets.googleapis.com/v4/spreadsheets/" + spreadsheetId
+          + "?ranges=" + encodeURIComponent(range)
+          + "&fields=" + encodeURIComponent(fields);
+  return url;
 }
 
 /**
- * flattenMergedDisp_ — เวอร์ชันเบาสำหรับ preview (flatten เฉพาะ display values)
+ * parallelFetchSheetData_ — อ่านข้อมูล + formatting จากหลายไฟล์พร้อมกัน
+ * คืน array ของ {values, merges, strikeRows, error} ตาม index ของ input
  */
-function flattenMergedDisp_(srcRange, disp, rowCount, colCount) {
-  srcRange.getMergedRanges().forEach(function(mr) {
-    var sr = mr.getRow() - srcRange.getRow();
-    var er = sr + mr.getNumRows() - 1;
-    var sc = mr.getColumn() - 1;
-    var ec = sc + mr.getNumColumns() - 1;
-    var bd = disp[sr][sc];
-    for (var r = sr; r <= er; r++) {
-      for (var c = sc; c <= ec; c++) {
-        if (r < rowCount && c < colCount) {
-          disp[r][c] = bd;
+function parallelFetchSheetData_(fileInfos) {
+  var oauthToken = ScriptApp.getOAuthToken();
+  var headers = { "Authorization": "Bearer " + oauthToken };
+  var requests = [];
+  var requestMap = []; // เก็บว่า request ไหนคือ type อะไรของไฟล์ไหน
+
+  fileInfos.forEach(function(fi, idx) {
+    var safeSheet = "'" + fi.sheetName.replace(/'/g, "''") + "'";
+    var headerRange = safeSheet + "!A" + fi.headerRow + ":" + colToA1_(fi.colCount) + fi.headerRow;
+    var dataRange   = safeSheet + "!A" + fi.dataStartRow + ":" + colToA1_(fi.colCount) + fi.dataEndRow;
+
+    // Request 1: values + formatting (ทุกอย่างในรอบเดียว)
+    var fields = "sheets.data.rowData.values(effectiveValue,formattedValue,effectiveFormat(backgroundColor,textFormat(foregroundColor,bold,strikethrough),horizontalAlignment)),sheets.merges";
+    requests.push({
+      url: buildSheetsApiUrl_(fi.spreadsheetId, dataRange, fields),
+      method: "get",
+      headers: headers,
+      muteHttpExceptions: true
+    });
+    requestMap.push({ fileIdx: idx, type: "data" });
+
+    // Request 2: headers
+    requests.push({
+      url: buildSheetsApiUrl_(fi.spreadsheetId, headerRange,
+        "sheets.data.rowData.values.formattedValue"),
+      method: "get",
+      headers: headers,
+      muteHttpExceptions: true
+    });
+    requestMap.push({ fileIdx: idx, type: "headers" });
+  });
+
+  // === ยิงทุก request พร้อมกัน ===
+  var responses = UrlFetchApp.fetchAll(requests);
+
+  // === Parse results ===
+  var results = fileInfos.map(function(fi) {
+    return {
+      headers: [], disp: [], vals: [],
+      bgs: [], fcs: [], fws: [], als: [],
+      strikeSet: {}, merges: [],
+      rowCount: fi.dataEndRow - fi.dataStartRow + 1,
+      colCount: fi.colCount,
+      error: null
+    };
+  });
+
+  responses.forEach(function(resp, ri) {
+    var map = requestMap[ri];
+    var result = results[map.fileIdx];
+    var fi = fileInfos[map.fileIdx];
+
+    try {
+      var code = resp.getResponseCode();
+      if (code !== 200) {
+        result.error = "HTTP " + code;
+        return;
+      }
+      var json = JSON.parse(resp.getContentText());
+
+      if (map.type === "headers") {
+        // Parse headers
+        var sheetData = json.sheets && json.sheets[0] && json.sheets[0].data && json.sheets[0].data[0];
+        if (sheetData && sheetData.rowData && sheetData.rowData[0]) {
+          var cells = sheetData.rowData[0].values || [];
+          result.headers = cells.map(function(c) {
+            return (c && c.formattedValue) ? c.formattedValue.toString().trim() : "";
+          });
         }
+      } else if (map.type === "data") {
+        // Parse merges
+        if (json.sheets && json.sheets[0] && json.sheets[0].merges) {
+          result.merges = json.sheets[0].merges;
+        }
+
+        // Parse row data
+        var sheetData = json.sheets && json.sheets[0] && json.sheets[0].data && json.sheets[0].data[0];
+        if (!sheetData || !sheetData.rowData) return;
+        var rowData = sheetData.rowData;
+
+        for (var r = 0; r < rowData.length; r++) {
+          var dRow=[], vRow=[], bRow=[], cRow=[], wRow=[], aRow=[];
+          var hasStrike = false;
+
+          if (!rowData[r] || !rowData[r].values) {
+            // empty row
+            for (var c = 0; c < fi.colCount; c++) {
+              dRow.push(""); vRow.push(""); bRow.push("#ffffff");
+              cRow.push("#000000"); wRow.push("normal"); aRow.push("left");
+            }
+          } else {
+            var cells = rowData[r].values;
+            for (var c = 0; c < fi.colCount; c++) {
+              var cell = (c < cells.length) ? cells[c] : null;
+              if (!cell) {
+                dRow.push(""); vRow.push(""); bRow.push("#ffffff");
+                cRow.push("#000000"); wRow.push("normal"); aRow.push("left");
+                continue;
+              }
+
+              // display value
+              dRow.push(cell.formattedValue || "");
+
+              // raw value
+              var ev = cell.effectiveValue;
+              if (ev) {
+                vRow.push(ev.numberValue !== undefined ? ev.numberValue :
+                          ev.stringValue !== undefined ? ev.stringValue :
+                          ev.boolValue !== undefined ? ev.boolValue :
+                          cell.formattedValue || "");
+              } else {
+                vRow.push(cell.formattedValue || "");
+              }
+
+              // formatting
+              var ef = cell.effectiveFormat || {};
+              var tf = ef.textFormat || {};
+
+              // background
+              var bg = ef.backgroundColor;
+              if (bg) {
+                var rr = Math.round((bg.red||0)*255), gg = Math.round((bg.green||0)*255), bb = Math.round((bg.blue||0)*255);
+                bRow.push("#" + ((1<<24)+(rr<<16)+(gg<<8)+bb).toString(16).slice(1));
+              } else { bRow.push("#ffffff"); }
+
+              // font color
+              var fc = tf.foregroundColor;
+              if (fc) {
+                var rr = Math.round((fc.red||0)*255), gg = Math.round((fc.green||0)*255), bb2 = Math.round((fc.blue||0)*255);
+                cRow.push("#" + ((1<<24)+(rr<<16)+(gg<<8)+bb2).toString(16).slice(1));
+              } else { cRow.push("#000000"); }
+
+              // font weight
+              wRow.push(tf.bold ? "bold" : "normal");
+
+              // alignment
+              aRow.push((ef.horizontalAlignment || "LEFT").toLowerCase());
+
+              // strikethrough
+              if (tf.strikethrough) hasStrike = true;
+            }
+          }
+
+          result.disp.push(dRow);
+          result.vals.push(vRow);
+          result.bgs.push(bRow);
+          result.fcs.push(cRow);
+          result.fws.push(wRow);
+          result.als.push(aRow);
+          if (hasStrike) result.strikeSet[r] = true;
+        }
+      }
+    } catch(e) {
+      result.error = e.message;
+    }
+  });
+
+  return results;
+}
+
+/**
+ * applyMerges_ — fill merged cells จาก Sheets API merge info
+ * merges format: [{startRowIndex, endRowIndex, startColumnIndex, endColumnIndex}]
+ */
+function applyMerges_(result, dataStartRow) {
+  if (!result.merges || !result.merges.length) return;
+  result.merges.forEach(function(mg) {
+    // convert sheet-absolute index → data-relative index
+    var sr = mg.startRowIndex - (dataStartRow - 1);
+    var er = mg.endRowIndex - (dataStartRow - 1) - 1;
+    var sc = mg.startColumnIndex;
+    var ec = mg.endColumnIndex - 1;
+    if (er < 0 || sr >= result.rowCount) return;
+    if (sr < 0) sr = 0;
+
+    var bv = result.vals[sr] ? result.vals[sr][sc] : "";
+    var bd = result.disp[sr] ? result.disp[sr][sc] : "";
+    var bb = result.bgs[sr]  ? result.bgs[sr][sc]  : "#ffffff";
+    var bf = result.fcs[sr]  ? result.fcs[sr][sc]  : "#000000";
+    var bw = result.fws[sr]  ? result.fws[sr][sc]  : "normal";
+    var ba = result.als[sr]  ? result.als[sr][sc]  : "left";
+
+    for (var r = sr; r <= er && r < result.rowCount; r++) {
+      for (var c = sc; c <= ec && c < result.colCount; c++) {
+        if (result.vals[r]) result.vals[r][c] = bv;
+        if (result.disp[r]) result.disp[r][c] = bd;
+        if (result.bgs[r])  result.bgs[r][c] = bb;
+        if (result.fcs[r])  result.fcs[r][c] = bf;
+        if (result.fws[r])  result.fws[r][c] = bw;
+        if (result.als[r])  result.als[r][c] = ba;
       }
     }
   });
@@ -472,24 +614,6 @@ function flattenMergedDisp_(srcRange, disp, rowCount, colCount) {
 /* ==========================================
    MERGE ENGINE HELPERS
    ========================================== */
-function flattenMergedCells_(srcRange, vals, disp, bgs, fcs, fws, als, rowCount, colCount) {
-  srcRange.getMergedRanges().forEach(function(mr) {
-    var sr = mr.getRow() - srcRange.getRow();
-    var er = sr + mr.getNumRows() - 1;
-    var sc = mr.getColumn() - 1;
-    var ec = sc + mr.getNumColumns() - 1;
-    var bv = vals[sr][sc], bd = disp[sr][sc], bb = bgs[sr][sc];
-    var bf = fcs[sr][sc],  bw = fws[sr][sc],  ba = als[sr][sc];
-    for (var r = sr; r <= er; r++) {
-      for (var c = sc; c <= ec; c++) {
-        if (r < rowCount && c < colCount) {
-          vals[r][c]=bv; disp[r][c]=bd; bgs[r][c]=bb;
-          fcs[r][c]=bf;  fws[r][c]=bw;  als[r][c]=ba;
-        }
-      }
-    }
-  });
-}
 
 /**
  * resolveValue_
@@ -592,62 +716,78 @@ function getPreviewData(token, configs, manualMapping) {
   var previewRows  = [];
   var totalSkipped = 0;
   var totalEmpty   = 0;
-  var totalNoBrand = 0; // แบรนด์และรุ่น ว่าง
-  var totalSource  = 0;  // จำนวน row ทั้งหมดก่อนกรอง
+  var totalNoBrand = 0;
+  var totalSource  = 0;
   var MAX_TOTAL    = 50, MAX_PER_FILE = 15;
 
+  // PHASE 1: Collect file info
+  var fileInfos = [];
   configs.forEach(function(cfg) {
-    if (previewRows.length >= MAX_TOTAL) return;
     if (!isFileInAllowedFolder_(cfg.fileId)) return;
-    var defaultValues = cfg.defaultValues || {};
-    var cfgMapping    = cfg.mapping || mapping;
-
     try {
       var ss    = SpreadsheetApp.openById(cfg.fileId);
       var sheet = ss.getSheetByName(cfg.sheetName);
       if (!sheet || sheet.isSheetHidden()) return;
-
       var lastRow = sheet.getLastRow();
       var lastCol = sheet.getLastColumn();
       var hRow    = cfg.headerRow || 1;
       if (lastRow <= hRow || !lastCol) return;
 
+      var scanRows = Math.min(lastRow - hRow, MAX_PER_FILE + 10);
       totalSource += (lastRow - hRow);
 
-      var headers   = sheet.getRange(hRow,1,1,lastCol).getDisplayValues()[0].map(function(h){return h.toString().trim();});
-      var scanRows  = Math.min(lastRow - hRow, MAX_PER_FILE + 10);
-      var dataRange = sheet.getRange(hRow+1,1,scanRows,lastCol);
-      var dispVals  = dataRange.getDisplayValues();
+      fileInfos.push({
+        cfg: cfg,
+        spreadsheetId: cfg.fileId,
+        sheetName: cfg.sheetName,
+        headerRow: hRow,
+        dataStartRow: hRow + 1,
+        dataEndRow: hRow + scanRows,
+        colCount: lastCol
+      });
+    } catch(e) { console.error("Preview discovery [" + cfg.fileName + "]: " + e.message); }
+  });
 
-      // flatten merged cells → เติมค่าให้ cell ที่ merge ไว้
-      flattenMergedDisp_(dataRange, dispVals, scanRows, lastCol);
+  if (!fileInfos.length) return { headers: TEMPLATE_HEADERS.concat(["[ที่มา]"]), rows: [], skipped: 0, emptyRows: 0, noBrand: 0, totalSource: 0, total: 0 };
 
-      // ใช้ Sheets API v4 ตรวจ strikethrough
-      var strikeSet = getStrikeRowSet_(cfg.fileId, cfg.sheetName, hRow+1, hRow+scanRows, lastCol);
-      var fileAdded = 0;
+  // PHASE 2: Parallel fetch
+  var fetched = parallelFetchSheetData_(fileInfos);
 
-      for (var r = 0; r < scanRows && fileAdded < MAX_PER_FILE && previewRows.length < MAX_TOTAL; r++) {
-        if (strikeSet[r]) { totalSkipped++; continue; }
-        var allEmpty = dispVals[r].every(function(v){ return !v || !v.toString().trim(); });
-        if (allEmpty) { totalEmpty++; continue; }
+  // PHASE 3: Process rows
+  var brandIdx = TEMPLATE_HEADERS.indexOf("แบรนด์และรุ่น");
 
-        var outRow = TEMPLATE_HEADERS.map(function(th) {
-          if (AUTO_DATE_HEADERS.indexOf(th) !== -1) return nowStr;
-          return resolveValue_(th, cfgMapping, defaultValues, headers, dispVals[r]).value;
-        });
+  fetched.forEach(function(result, idx) {
+    if (previewRows.length >= MAX_TOTAL) return;
+    if (result.error) return;
+    var fi  = fileInfos[idx];
+    var cfg = fi.cfg;
+    var cfgMapping    = cfg.mapping || mapping;
+    var defaultValues = cfg.defaultValues || {};
+    var fileAdded     = 0;
 
-        // เช็ค "แบรนด์และรุ่น" ว่าง → ลบ row ทิ้ง
-        var brandIdx = TEMPLATE_HEADERS.indexOf("แบรนด์และรุ่น");
-        if (brandIdx !== -1) {
-          var brandVal = outRow[brandIdx];
-          if (!brandVal || !brandVal.toString().trim()) { totalNoBrand++; continue; }
-        }
+    // Apply merged cells
+    applyMerges_(result, fi.dataStartRow);
 
-        outRow.push(cfg.fileName + " / " + cfg.sheetName);
-        previewRows.push(outRow);
-        fileAdded++;
+    for (var r = 0; r < result.disp.length && fileAdded < MAX_PER_FILE && previewRows.length < MAX_TOTAL; r++) {
+      if (result.strikeSet[r]) { totalSkipped++; continue; }
+      var allEmpty = result.disp[r].every(function(v){ return !v || !v.toString().trim(); });
+      if (allEmpty) { totalEmpty++; continue; }
+
+      var outRow = TEMPLATE_HEADERS.map(function(th) {
+        if (AUTO_DATE_HEADERS.indexOf(th) !== -1) return nowStr;
+        return resolveValue_(th, cfgMapping, defaultValues, result.headers, result.disp[r]).value;
+      });
+
+      // เช็ค "แบรนด์และรุ่น" ว่าง → ลบ row ทิ้ง
+      if (brandIdx !== -1) {
+        var brandVal = outRow[brandIdx];
+        if (!brandVal || !brandVal.toString().trim()) { totalNoBrand++; continue; }
       }
-    } catch(e) { console.error("Preview [" + cfg.fileName + "]: " + e.message); }
+
+      outRow.push(cfg.fileName + " / " + cfg.sheetName);
+      previewRows.push(outRow);
+      fileAdded++;
+    }
   });
 
   return {
@@ -671,32 +811,60 @@ function mergeSelectedFiles(token, configs, newFileName, targetFolderId) {
   requireAuth_(token);
   if (!newFileName || !newFileName.trim()) return JSON.stringify({ error: "กรุณาระบุชื่อไฟล์ใหม่" });
 
-  var nowStr       = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+  var nowStr        = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
   var masterHeaders = TEMPLATE_HEADERS.slice();
   var special       = AUTO_DATE_HEADERS.slice();
-  var sourceBlocks  = [];
+  var errorFiles    = [];
 
   try {
-    // PHASE 1: Discovery
+    // PHASE 1: Discovery — หา sheet metadata (ใช้ SpreadsheetApp เบาๆ แค่ header + row/col count)
+    var fileInfos = [];
     configs.forEach(function(cfg) {
       if (!isFileInAllowedFolder_(cfg.fileId)) return;
-      var ss    = SpreadsheetApp.openById(cfg.fileId);
-      var sheet = ss.getSheetByName(cfg.sheetName);
-      if (!sheet || sheet.isSheetHidden()) return;
+      try {
+        var ss    = SpreadsheetApp.openById(cfg.fileId);
+        var sheet = ss.getSheetByName(cfg.sheetName);
+        if (!sheet || sheet.isSheetHidden()) return;
 
-      var lastRow = sheet.getLastRow();
-      var lastCol = sheet.getLastColumn();
-      var hRow    = cfg.headerRow || 1;
-      if (!lastRow || !lastCol) return;
+        var lastRow = sheet.getLastRow();
+        var lastCol = sheet.getLastColumn();
+        var hRow    = cfg.headerRow || 1;
+        if (!lastRow || !lastCol || lastRow <= hRow) return;
 
-      var rawH = sheet.getRange(hRow,1,1,lastCol).getDisplayValues()[0].map(function(h){return h.toString().trim();});
+        fileInfos.push({
+          cfg: cfg,
+          spreadsheetId: cfg.fileId,
+          sheetName: cfg.sheetName,
+          headerRow: hRow,
+          dataStartRow: hRow + 1,
+          dataEndRow: lastRow,
+          colCount: lastCol
+        });
+      } catch(e) {
+        errorFiles.push({ name: cfg.fileName + " / " + cfg.sheetName, reason: e.message });
+      }
+    });
 
-      // เพิ่ม extra col ต่อท้าย master เฉพาะที่ยังไม่ได้ map ไป template ใดๆ
-      var cfgMap = cfg.mapping || {};
-      rawH.forEach(function(h) {
+    if (!fileInfos.length) return JSON.stringify({ error: "ไม่พบข้อมูลในไฟล์ที่เลือก" });
+
+    // PHASE 2: Parallel fetch — อ่านทุกไฟล์พร้อมกัน
+    var fetched = parallelFetchSheetData_(fileInfos);
+
+    // Build masterHeaders from fetched headers + apply merges
+    fetched.forEach(function(result, idx) {
+      if (result.error) {
+        errorFiles.push({ name: fileInfos[idx].cfg.fileName + " / " + fileInfos[idx].cfg.sheetName, reason: result.error });
+        return;
+      }
+
+      // Apply merged cells
+      applyMerges_(result, fileInfos[idx].dataStartRow);
+
+      // Extra cols discovery
+      var cfgMap = fileInfos[idx].cfg.mapping || {};
+      result.headers.forEach(function(h) {
         if (!h) return;
         var normH = normalizeHeader_(h);
-        // ถ้าถูก map เป็น value ของ template col ใดๆ ให้ข้าม (จะถูกใส่ใน template col นั้นแล้ว)
         var isMapped = Object.keys(cfgMap).some(function(th) {
           var vals = cfgMap[th];
           if (!Array.isArray(vals)) vals = [vals];
@@ -706,30 +874,12 @@ function mergeSelectedFiles(token, configs, newFileName, targetFolderId) {
           masterHeaders.push(h);
         }
       });
-
-      if (lastRow > hRow) {
-        sourceBlocks.push({
-          fileConfig:    cfg,
-          headers:       rawH,
-          mapping:       cfg.mapping || {},
-          defaultValues: cfg.defaultValues || {},
-          range:         sheet.getRange(hRow+1, 1, lastRow-hRow, lastCol),
-          rowCount:      lastRow - hRow,
-          colCount:      lastCol,
-          spreadsheetId: cfg.fileId,
-          sheetName:     cfg.sheetName,
-          dataStartRow:  hRow + 1,
-          dataEndRow:    lastRow
-        });
-      }
     });
-
-    if (!sourceBlocks.length) return JSON.stringify({ error: "ไม่พบข้อมูลในไฟล์ที่เลือก" });
 
     // แทรก [ที่มา] ต่อจาก TEMPLATE_HEADERS (ก่อน extra cols)
     masterHeaders.splice(TEMPLATE_HEADERS.length, 0, "[ที่มา]");
 
-    // PHASE 2: สร้างไฟล์
+    // PHASE 3: สร้างไฟล์
     var newSS  = SpreadsheetApp.create(newFileName);
     var dest   = targetFolderId ? DriveApp.getFolderById(targetFolderId) : DriveApp.getFolderById(MAIN_FOLDER_ID);
     DriveApp.getFileById(newSS.getId()).moveTo(dest);
@@ -742,34 +892,33 @@ function mergeSelectedFiles(token, configs, newFileName, targetFolderId) {
       .setHorizontalAlignment("center").setVerticalAlignment("middle");
     destSheet.setFrozenRows(1);
 
-    // PHASE 3: Copy data
-    var currentRow = 2, totalRows = 0, totalSourceRows = 0;
+    // PHASE 4: Process + batch write
+    var allV=[], allB=[], allC=[], allW=[], allA=[];
+    var totalRows = 0, totalSourceRows = 0;
     var strikeRows = 0, emptyRows = 0, noBrandRows = 0;
-    sourceBlocks.forEach(function(block) {
-      totalSourceRows += block.rowCount;
-      var srcRange  = block.range;
-      var vals      = srcRange.getValues();
-      var disp      = srcRange.getDisplayValues();
-      var bgs       = srcRange.getBackgrounds();
-      var fcs       = srcRange.getFontColors();
-      var fws       = srcRange.getFontWeights();
-      var als       = srcRange.getHorizontalAlignments();
 
-      flattenMergedCells_(srcRange, vals, disp, bgs, fcs, fws, als, block.rowCount, block.colCount);
+    fetched.forEach(function(result, idx) {
+      if (result.error) return;
+      var fi  = fileInfos[idx];
+      var cfg = fi.cfg;
+      var mapping       = cfg.mapping || {};
+      var defaultValues = cfg.defaultValues || {};
+      var block = { headers: result.headers, colCount: result.colCount };
 
-      // ใช้ Sheets API v4 ตรวจ strikethrough
-      var strikeSet = getStrikeRowSet_(block.spreadsheetId, block.sheetName, block.dataStartRow, block.dataEndRow, block.colCount);
+      totalSourceRows += result.rowCount;
 
-      var outV=[], outB=[], outC=[], outW=[], outA=[];
-      for (var r = 0; r < block.rowCount; r++) {
-        if (strikeSet[r]) { strikeRows++; continue; }
-        var allEmpty = disp[r].every(function(v){ return !v || !v.toString().trim(); });
+      for (var r = 0; r < result.disp.length; r++) {
+        // skip strikethrough
+        if (result.strikeSet[r]) { strikeRows++; continue; }
+        // skip empty
+        var allEmpty = result.disp[r].every(function(v){ return !v || !v.toString().trim(); });
         if (allEmpty) { emptyRows++; continue; }
 
-        var sourceName = block.fileConfig.fileName + " / " + block.fileConfig.sheetName;
+        var sourceName = cfg.fileName + " / " + cfg.sheetName;
         var row = buildOutputRow_(masterHeaders, special, AUTO_DATE_HEADERS,
-                                   block.mapping, block.defaultValues,
-                                   block, r, disp, bgs, fcs, fws, als, nowStr, sourceName);
+                                   mapping, defaultValues,
+                                   block, r, result.disp, result.bgs, result.fcs,
+                                   result.fws, result.als, nowStr, sourceName);
 
         // เช็ค "แบรนด์และรุ่น" ว่าง → ลบ row ทิ้ง
         var brandMIdx = masterHeaders.indexOf("แบรนด์และรุ่น");
@@ -778,17 +927,17 @@ function mergeSelectedFiles(token, configs, newFileName, targetFolderId) {
           if (!bv || !bv.toString().trim()) { noBrandRows++; continue; }
         }
 
-        outV.push(row.v); outB.push(row.b); outC.push(row.c);
-        outW.push(row.w); outA.push(row.a);
-      }
-      if (outV.length) {
-        applyStyles_(destSheet, currentRow, masterHeaders.length, outV, outB, outC, outW, outA);
-        currentRow += outV.length;
-        totalRows  += outV.length;
+        allV.push(row.v); allB.push(row.b); allC.push(row.c);
+        allW.push(row.w); allA.push(row.a);
       }
     });
 
-    if (currentRow > 2) destSheet.getRange(1,1,currentRow-1,masterHeaders.length).setVerticalAlignment("middle");
+    // Batch write ทีเดียว
+    totalRows = allV.length;
+    if (totalRows > 0) {
+      applyStyles_(destSheet, 2, masterHeaders.length, allV, allB, allC, allW, allA);
+      destSheet.getRange(1,1,totalRows+1,masterHeaders.length).setVerticalAlignment("middle");
+    }
     destSheet.autoResizeColumns(1, masterHeaders.length);
 
     var msg = "รวมสำเร็จ: " + totalRows + " แถว  |  ไฟล์: " + newFileName;
@@ -797,6 +946,10 @@ function mergeSelectedFiles(token, configs, newFileName, targetFolderId) {
       if (strikeRows  > 0) msg += " | ลบขีดฆ่า " + strikeRows + " แถว";
       if (noBrandRows > 0) msg += " | ไม่มีแบรนด์/รุ่น " + noBrandRows + " แถว";
       if (emptyRows   > 0) msg += " | ข้ามแถวว่าง " + emptyRows + " แถว";
+    }
+    if (errorFiles.length > 0) {
+      msg += "\n⚠️ ข้ามไฟล์ที่มีปัญหา " + errorFiles.length + " ไฟล์:";
+      errorFiles.forEach(function(ef) { msg += "\n   - " + ef.name + " (" + ef.reason + ")"; });
     }
 
     return JSON.stringify({
@@ -807,7 +960,8 @@ function mergeSelectedFiles(token, configs, newFileName, targetFolderId) {
       totalSource: totalSourceRows,
       strikeRows:  strikeRows,
       noBrandRows: noBrandRows,
-      emptyRows:   emptyRows
+      emptyRows:   emptyRows,
+      errorFiles:  errorFiles
     });
   } catch(e) { return JSON.stringify({ error: "ผิดพลาด: " + e.message }); }
 }

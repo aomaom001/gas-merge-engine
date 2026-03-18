@@ -1819,6 +1819,10 @@
                 if (result.emptyRows > 0)  mainMsg += ' → แถวว่าง -' + result.emptyRows;
                 mainMsg += ' → คงเหลือ ' + result.rows + ' แถว';
               }
+              if (result.errorFiles && result.errorFiles.length > 0) {
+                mainMsg += '\n⚠️ ข้ามไฟล์ที่มีปัญหา ' + result.errorFiles.length + ' ไฟล์:';
+                result.errorFiles.forEach(function(ef) { mainMsg += '\n   - ' + ef.name + ' (' + ef.reason + ')'; });
+              }
               msgEl.textContent  = mainMsg;
               linkEl.href        = result.url;
               linkEl.textContent = '🔗 เปิด "' + result.fileName + '" ใน Google Sheets';
