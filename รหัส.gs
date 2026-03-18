@@ -419,7 +419,10 @@ function buildSheetsApiUrl_(spreadsheetId, range, fields) {
 function parallelFetchSheetData_(fileInfos) {
   var oauthToken = ScriptApp.getOAuthToken();
   var authHeaders = { "Authorization": "Bearer " + oauthToken };
-  var BATCH_SIZE = 5; // จำนวนไฟล์ต่อ batch (5 ไฟล์ = 5 requests)
+  var BATCH_SIZE = 3; // 3 ไฟล์ต่อ batch (ไม่เกิน 60 req/min)
+  var BATCH_DELAY = 4000; // 4 วินาทีระหว่าง batch
+  var MAX_RETRIES = 3; // retry สูงสุด 3 รอบ
+  var RETRY_DELAY = 5000; // 5 วินาทีต่อ retry
   var fields = "sheets.data.rowData.values(effectiveValue,formattedValue,effectiveFormat(backgroundColor,textFormat(foregroundColor,bold,strikethrough),horizontalAlignment)),sheets.merges";
 
   // สร้าง result placeholders
@@ -434,79 +437,70 @@ function parallelFetchSheetData_(fileInfos) {
     };
   });
 
-  // แบ่งไฟล์เป็น batch ทีละ BATCH_SIZE
-  for (var batchStart = 0; batchStart < fileInfos.length; batchStart += BATCH_SIZE) {
-    if (batchStart > 0) Utilities.sleep(1500); // delay ระหว่าง batch
+  // สร้าง request สำหรับทุกไฟล์
+  var allRequests = fileInfos.map(function(fi) {
+    var safeSheet = "'" + fi.sheetName.replace(/'/g, "''") + "'";
+    var lastCol = colToA1_(fi.colCount);
+    var fullRange = safeSheet + "!A" + fi.headerRow + ":" + lastCol + fi.dataEndRow;
+    return {
+      url: buildSheetsApiUrl_(fi.spreadsheetId, fullRange, fields),
+      method: "get",
+      headers: authHeaders,
+      muteHttpExceptions: true
+    };
+  });
 
-    var batchEnd = Math.min(batchStart + BATCH_SIZE, fileInfos.length);
-    var requests = [];
-    var batchIndices = [];
+  // pending = indices ที่ยังไม่สำเร็จ
+  var pending = [];
+  for (var i = 0; i < fileInfos.length; i++) pending.push(i);
 
-    for (var i = batchStart; i < batchEnd; i++) {
-      var fi = fileInfos[i];
-      var safeSheet = "'" + fi.sheetName.replace(/'/g, "''") + "'";
-      var lastCol = colToA1_(fi.colCount);
-      // รวม header + data ใน range เดียว (ตั้งแต่ headerRow ถึง dataEndRow)
-      var fullRange = safeSheet + "!A" + fi.headerRow + ":" + lastCol + fi.dataEndRow;
+  for (var attempt = 0; attempt < MAX_RETRIES && pending.length > 0; attempt++) {
+    // แบ่ง pending เป็น batch
+    for (var batchStart = 0; batchStart < pending.length; batchStart += BATCH_SIZE) {
+      if (attempt > 0 || batchStart > 0) Utilities.sleep(attempt === 0 ? BATCH_DELAY : RETRY_DELAY);
 
-      requests.push({
-        url: buildSheetsApiUrl_(fi.spreadsheetId, fullRange, fields),
-        method: "get",
-        headers: authHeaders,
-        muteHttpExceptions: true
-      });
-      batchIndices.push(i);
-    }
-
-    // ยิง batch นี้พร้อมกัน
-    var responses = UrlFetchApp.fetchAll(requests);
-
-    // เก็บ request ที่ได้ 429 เพื่อ retry
-    var retryRequests = [];
-    var retryIndices  = [];
-
-    // Parse responses
-    responses.forEach(function(resp, ri) {
-      var fileIdx = batchIndices[ri];
-      var result  = results[fileIdx];
-      var fi      = fileInfos[fileIdx];
-
-      try {
-        var code = resp.getResponseCode();
-        if (code === 429) {
-          // เก็บไว้ retry ทีหลัง
-          retryRequests.push(requests[ri]);
-          retryIndices.push(fileIdx);
-          return;
-        }
-        if (code !== 200) {
-          result.error = "HTTP " + code;
-          return;
-        }
-        var json = JSON.parse(resp.getContentText());
-        parseSheetResponse_(json, result, fi);
-      } catch(e) {
-        result.error = e.message;
+      var batchEnd = Math.min(batchStart + BATCH_SIZE, pending.length);
+      var batchRequests = [];
+      var batchPendingIdx = [];
+      for (var b = batchStart; b < batchEnd; b++) {
+        batchRequests.push(allRequests[pending[b]]);
+        batchPendingIdx.push(pending[b]);
       }
-    });
 
-    // === Retry 429 errors (ทีละ 1, รอ 3 วินาทีต่อ request) ===
-    for (var rt = 0; rt < retryRequests.length; rt++) {
-      Utilities.sleep(3000);
-      var fileIdx = retryIndices[rt];
-      var result  = results[fileIdx];
-      var fi      = fileInfos[fileIdx];
-      try {
-        var retryResp = UrlFetchApp.fetch(retryRequests[rt].url, {
-          method: "get", headers: authHeaders, muteHttpExceptions: true
-        });
-        var code = retryResp.getResponseCode();
-        if (code !== 200) { result.error = "HTTP " + code + " (retry)"; continue; }
-        var json = JSON.parse(retryResp.getContentText());
-        parseSheetResponse_(json, result, fi);
-      } catch(e) { result.error = e.message; }
+      var responses = UrlFetchApp.fetchAll(batchRequests);
+
+      responses.forEach(function(resp, ri) {
+        var fileIdx = batchPendingIdx[ri];
+        var result = results[fileIdx];
+        var fi = fileInfos[fileIdx];
+        try {
+          var code = resp.getResponseCode();
+          if (code === 429) return; // ยังอยู่ใน pending ลอง retry รอบถัดไป
+          if (code !== 200) { result.error = "HTTP " + code; return; }
+          var json = JSON.parse(resp.getContentText());
+          parseSheetResponse_(json, result, fi);
+          result.error = null; // สำเร็จ
+        } catch(e) {
+          result.error = e.message;
+        }
+      });
     }
+
+    // อัปเดต pending: เก็บเฉพาะที่ยังไม่มี data + ไม่มี error ถาวร (ยกเว้น 429)
+    var newPending = [];
+    for (var p = 0; p < pending.length; p++) {
+      var idx = pending[p];
+      if (results[idx].disp.length === 0 && results[idx].headers.length === 0 && !results[idx].error) {
+        newPending.push(idx); // 429 → retry
+      }
+    }
+    pending = newPending;
   }
+
+  // ถ้ายัง pending อยู่ ให้ mark error
+  pending.forEach(function(idx) {
+    if (!results[idx].error) results[idx].error = "Rate limit (retry หมดแล้ว)";
+  });
 
   return results;
 }
