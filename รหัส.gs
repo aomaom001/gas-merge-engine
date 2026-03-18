@@ -418,40 +418,11 @@ function buildSheetsApiUrl_(spreadsheetId, range, fields) {
  */
 function parallelFetchSheetData_(fileInfos) {
   var oauthToken = ScriptApp.getOAuthToken();
-  var headers = { "Authorization": "Bearer " + oauthToken };
-  var requests = [];
-  var requestMap = []; // เก็บว่า request ไหนคือ type อะไรของไฟล์ไหน
+  var authHeaders = { "Authorization": "Bearer " + oauthToken };
+  var BATCH_SIZE = 5; // จำนวนไฟล์ต่อ batch (5 ไฟล์ = 5 requests)
+  var fields = "sheets.data.rowData.values(effectiveValue,formattedValue,effectiveFormat(backgroundColor,textFormat(foregroundColor,bold,strikethrough),horizontalAlignment)),sheets.merges";
 
-  fileInfos.forEach(function(fi, idx) {
-    var safeSheet = "'" + fi.sheetName.replace(/'/g, "''") + "'";
-    var headerRange = safeSheet + "!A" + fi.headerRow + ":" + colToA1_(fi.colCount) + fi.headerRow;
-    var dataRange   = safeSheet + "!A" + fi.dataStartRow + ":" + colToA1_(fi.colCount) + fi.dataEndRow;
-
-    // Request 1: values + formatting (ทุกอย่างในรอบเดียว)
-    var fields = "sheets.data.rowData.values(effectiveValue,formattedValue,effectiveFormat(backgroundColor,textFormat(foregroundColor,bold,strikethrough),horizontalAlignment)),sheets.merges";
-    requests.push({
-      url: buildSheetsApiUrl_(fi.spreadsheetId, dataRange, fields),
-      method: "get",
-      headers: headers,
-      muteHttpExceptions: true
-    });
-    requestMap.push({ fileIdx: idx, type: "data" });
-
-    // Request 2: headers
-    requests.push({
-      url: buildSheetsApiUrl_(fi.spreadsheetId, headerRange,
-        "sheets.data.rowData.values.formattedValue"),
-      method: "get",
-      headers: headers,
-      muteHttpExceptions: true
-    });
-    requestMap.push({ fileIdx: idx, type: "headers" });
-  });
-
-  // === ยิงทุก request พร้อมกัน ===
-  var responses = UrlFetchApp.fetchAll(requests);
-
-  // === Parse results ===
+  // สร้าง result placeholders
   var results = fileInfos.map(function(fi) {
     return {
       headers: [], disp: [], vals: [],
@@ -463,117 +434,152 @@ function parallelFetchSheetData_(fileInfos) {
     };
   });
 
-  responses.forEach(function(resp, ri) {
-    var map = requestMap[ri];
-    var result = results[map.fileIdx];
-    var fi = fileInfos[map.fileIdx];
+  // แบ่งไฟล์เป็น batch ทีละ BATCH_SIZE
+  for (var batchStart = 0; batchStart < fileInfos.length; batchStart += BATCH_SIZE) {
+    if (batchStart > 0) Utilities.sleep(1500); // delay ระหว่าง batch
 
-    try {
-      var code = resp.getResponseCode();
-      if (code !== 200) {
-        result.error = "HTTP " + code;
-        return;
-      }
-      var json = JSON.parse(resp.getContentText());
+    var batchEnd = Math.min(batchStart + BATCH_SIZE, fileInfos.length);
+    var requests = [];
+    var batchIndices = [];
 
-      if (map.type === "headers") {
-        // Parse headers
-        var sheetData = json.sheets && json.sheets[0] && json.sheets[0].data && json.sheets[0].data[0];
-        if (sheetData && sheetData.rowData && sheetData.rowData[0]) {
-          var cells = sheetData.rowData[0].values || [];
-          result.headers = cells.map(function(c) {
-            return (c && c.formattedValue) ? c.formattedValue.toString().trim() : "";
-          });
-        }
-      } else if (map.type === "data") {
-        // Parse merges
-        if (json.sheets && json.sheets[0] && json.sheets[0].merges) {
-          result.merges = json.sheets[0].merges;
-        }
+    for (var i = batchStart; i < batchEnd; i++) {
+      var fi = fileInfos[i];
+      var safeSheet = "'" + fi.sheetName.replace(/'/g, "''") + "'";
+      var lastCol = colToA1_(fi.colCount);
+      // รวม header + data ใน range เดียว (ตั้งแต่ headerRow ถึง dataEndRow)
+      var fullRange = safeSheet + "!A" + fi.headerRow + ":" + lastCol + fi.dataEndRow;
 
-        // Parse row data
-        var sheetData = json.sheets && json.sheets[0] && json.sheets[0].data && json.sheets[0].data[0];
-        if (!sheetData || !sheetData.rowData) return;
-        var rowData = sheetData.rowData;
-
-        for (var r = 0; r < rowData.length; r++) {
-          var dRow=[], vRow=[], bRow=[], cRow=[], wRow=[], aRow=[];
-          var hasStrike = false;
-
-          if (!rowData[r] || !rowData[r].values) {
-            // empty row
-            for (var c = 0; c < fi.colCount; c++) {
-              dRow.push(""); vRow.push(""); bRow.push("#ffffff");
-              cRow.push("#000000"); wRow.push("normal"); aRow.push("left");
-            }
-          } else {
-            var cells = rowData[r].values;
-            for (var c = 0; c < fi.colCount; c++) {
-              var cell = (c < cells.length) ? cells[c] : null;
-              if (!cell) {
-                dRow.push(""); vRow.push(""); bRow.push("#ffffff");
-                cRow.push("#000000"); wRow.push("normal"); aRow.push("left");
-                continue;
-              }
-
-              // display value
-              dRow.push(cell.formattedValue || "");
-
-              // raw value
-              var ev = cell.effectiveValue;
-              if (ev) {
-                vRow.push(ev.numberValue !== undefined ? ev.numberValue :
-                          ev.stringValue !== undefined ? ev.stringValue :
-                          ev.boolValue !== undefined ? ev.boolValue :
-                          cell.formattedValue || "");
-              } else {
-                vRow.push(cell.formattedValue || "");
-              }
-
-              // formatting
-              var ef = cell.effectiveFormat || {};
-              var tf = ef.textFormat || {};
-
-              // background
-              var bg = ef.backgroundColor;
-              if (bg) {
-                var rr = Math.round((bg.red||0)*255), gg = Math.round((bg.green||0)*255), bb = Math.round((bg.blue||0)*255);
-                bRow.push("#" + ((1<<24)+(rr<<16)+(gg<<8)+bb).toString(16).slice(1));
-              } else { bRow.push("#ffffff"); }
-
-              // font color
-              var fc = tf.foregroundColor;
-              if (fc) {
-                var rr = Math.round((fc.red||0)*255), gg = Math.round((fc.green||0)*255), bb2 = Math.round((fc.blue||0)*255);
-                cRow.push("#" + ((1<<24)+(rr<<16)+(gg<<8)+bb2).toString(16).slice(1));
-              } else { cRow.push("#000000"); }
-
-              // font weight
-              wRow.push(tf.bold ? "bold" : "normal");
-
-              // alignment
-              aRow.push((ef.horizontalAlignment || "LEFT").toLowerCase());
-
-              // strikethrough
-              if (tf.strikethrough) hasStrike = true;
-            }
-          }
-
-          result.disp.push(dRow);
-          result.vals.push(vRow);
-          result.bgs.push(bRow);
-          result.fcs.push(cRow);
-          result.fws.push(wRow);
-          result.als.push(aRow);
-          if (hasStrike) result.strikeSet[r] = true;
-        }
-      }
-    } catch(e) {
-      result.error = e.message;
+      requests.push({
+        url: buildSheetsApiUrl_(fi.spreadsheetId, fullRange, fields),
+        method: "get",
+        headers: authHeaders,
+        muteHttpExceptions: true
+      });
+      batchIndices.push(i);
     }
-  });
+
+    // ยิง batch นี้พร้อมกัน
+    var responses = UrlFetchApp.fetchAll(requests);
+
+    // เก็บ request ที่ได้ 429 เพื่อ retry
+    var retryRequests = [];
+    var retryIndices  = [];
+
+    // Parse responses
+    responses.forEach(function(resp, ri) {
+      var fileIdx = batchIndices[ri];
+      var result  = results[fileIdx];
+      var fi      = fileInfos[fileIdx];
+
+      try {
+        var code = resp.getResponseCode();
+        if (code === 429) {
+          // เก็บไว้ retry ทีหลัง
+          retryRequests.push(requests[ri]);
+          retryIndices.push(fileIdx);
+          return;
+        }
+        if (code !== 200) {
+          result.error = "HTTP " + code;
+          return;
+        }
+        var json = JSON.parse(resp.getContentText());
+        parseSheetResponse_(json, result, fi);
+      } catch(e) {
+        result.error = e.message;
+      }
+    });
+
+    // === Retry 429 errors (ทีละ 1, รอ 3 วินาทีต่อ request) ===
+    for (var rt = 0; rt < retryRequests.length; rt++) {
+      Utilities.sleep(3000);
+      var fileIdx = retryIndices[rt];
+      var result  = results[fileIdx];
+      var fi      = fileInfos[fileIdx];
+      try {
+        var retryResp = UrlFetchApp.fetch(retryRequests[rt].url, {
+          method: "get", headers: authHeaders, muteHttpExceptions: true
+        });
+        var code = retryResp.getResponseCode();
+        if (code !== 200) { result.error = "HTTP " + code + " (retry)"; continue; }
+        var json = JSON.parse(retryResp.getContentText());
+        parseSheetResponse_(json, result, fi);
+      } catch(e) { result.error = e.message; }
+    }
+  }
 
   return results;
+}
+
+/**
+ * parseSheetResponse_ — parse JSON response จาก Sheets API v4
+ */
+function parseSheetResponse_(json, result, fi) {
+  if (json.sheets && json.sheets[0] && json.sheets[0].merges) {
+    result.merges = json.sheets[0].merges;
+  }
+  var sheetData = json.sheets && json.sheets[0] && json.sheets[0].data && json.sheets[0].data[0];
+  if (!sheetData || !sheetData.rowData) return;
+  var rowData = sheetData.rowData;
+
+  if (rowData[0] && rowData[0].values) {
+    result.headers = rowData[0].values.map(function(c) {
+      return (c && c.formattedValue) ? c.formattedValue.toString().trim() : "";
+    });
+  }
+
+  for (var r = 1; r < rowData.length; r++) {
+    var dRow=[], vRow=[], bRow=[], cRow=[], wRow=[], aRow=[];
+    var hasStrike = false;
+
+    if (!rowData[r] || !rowData[r].values) {
+      for (var c = 0; c < fi.colCount; c++) {
+        dRow.push(""); vRow.push(""); bRow.push("#ffffff");
+        cRow.push("#000000"); wRow.push("normal"); aRow.push("left");
+      }
+    } else {
+      var cells = rowData[r].values;
+      for (var c = 0; c < fi.colCount; c++) {
+        var cell = (c < cells.length) ? cells[c] : null;
+        if (!cell) {
+          dRow.push(""); vRow.push(""); bRow.push("#ffffff");
+          cRow.push("#000000"); wRow.push("normal"); aRow.push("left");
+          continue;
+        }
+        dRow.push(cell.formattedValue || "");
+        var ev = cell.effectiveValue;
+        if (ev) {
+          vRow.push(ev.numberValue !== undefined ? ev.numberValue :
+                    ev.stringValue !== undefined ? ev.stringValue :
+                    ev.boolValue !== undefined ? ev.boolValue :
+                    cell.formattedValue || "");
+        } else { vRow.push(cell.formattedValue || ""); }
+
+        var ef = cell.effectiveFormat || {};
+        var tf = ef.textFormat || {};
+        var bg = ef.backgroundColor;
+        if (bg) {
+          var rr = Math.round((bg.red||0)*255), gg = Math.round((bg.green||0)*255), bb = Math.round((bg.blue||0)*255);
+          bRow.push("#" + ((1<<24)+(rr<<16)+(gg<<8)+bb).toString(16).slice(1));
+        } else { bRow.push("#ffffff"); }
+        var fc = tf.foregroundColor;
+        if (fc) {
+          var rr = Math.round((fc.red||0)*255), gg = Math.round((fc.green||0)*255), bb2 = Math.round((fc.blue||0)*255);
+          cRow.push("#" + ((1<<24)+(rr<<16)+(gg<<8)+bb2).toString(16).slice(1));
+        } else { cRow.push("#000000"); }
+        wRow.push(tf.bold ? "bold" : "normal");
+        aRow.push((ef.horizontalAlignment || "LEFT").toLowerCase());
+        if (tf.strikethrough) hasStrike = true;
+      }
+    }
+    result.disp.push(dRow);
+    result.vals.push(vRow);
+    result.bgs.push(bRow);
+    result.fcs.push(cRow);
+    result.fws.push(wRow);
+    result.als.push(aRow);
+    if (hasStrike) result.strikeSet[r - 1] = true;
+  }
 }
 
 /**

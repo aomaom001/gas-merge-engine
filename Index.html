@@ -291,8 +291,9 @@
             <div style="display:flex;gap:8px;margin-bottom:12px;">
               <button onclick="syncFiles(this)" class="btn btn-orange" style="flex:1;font-size:12px;padding:8px;">🔄 Sync Excel → Sheets</button>
             </div>
-            <div class="search-box">
-              <input type="text" id="mergeSearch" class="input-field" placeholder="ค้นหาไฟล์..." oninput="filterCheckList('mergeSearch','multiFileSelect')">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+              <input type="text" id="mergeSearch" class="input-field" placeholder="ค้นหาไฟล์..." oninput="filterCheckList('mergeSearch','multiFileSelect')" style="flex:1;">
+              <button onclick="toggleSelectAllFiles(this)" class="btn" style="font-size:11px;padding:6px 12px;white-space:nowrap;">☑ เลือกทั้งหมด</button>
             </div>
             <div id="multiFileSelect" class="check-area" style="flex:1;max-height:none;">
               <div class="empty-state">
@@ -859,6 +860,20 @@
       /* ==========================================
          MERGE FILE TOGGLE (Merge tab)
          ========================================== */
+      function toggleSelectAllFiles(btn) {
+        var cbs = document.querySelectorAll('input[name="f_check"]');
+        var allChecked = Array.prototype.every.call(cbs, function(cb) { return cb.checked; });
+        var newState = !allChecked;
+
+        cbs.forEach(function(cb) {
+          if (cb.checked !== newState) {
+            cb.checked = newState;
+            onMergeFileToggle(cb);
+          }
+        });
+        btn.textContent = newState ? '☐ ยกเลิกทั้งหมด' : '☑ เลือกทั้งหมด';
+      }
+
       function onMergeFileToggle(cb) {
         var panel = document.getElementById('conf-' + cb.value);
         if (cb.checked) {
