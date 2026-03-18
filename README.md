@@ -1,174 +1,226 @@
-# คู่มือการใช้งาน GAS Promotion Merger
+# GAS Promotion Merger — User Guide
 
-> **หมายเหตุ:** คู่มือนี้ครอบคลุม Tab 1 และ Tab 2 เท่านั้น (Tab 3 อยู่ระหว่างพัฒนา)
+> **Note:** This guide covers Tab 1 and Tab 2 only. Tab 3 is currently under development.
 
 ---
 
-## หน้า Login
+## Table of Contents
 
-เปิด Web App URL แล้วใส่ชื่อผู้ใช้และรหัสผ่านที่ตั้งไว้ใน Script Properties
+- [Deployment & Setup](#deployment--setup)
+- [Login](#login)
+- [Tab 1 — AI Chat Bot](#tab-1--ai-chat-bot)
+- [Tab 2 — Manage / Merge Files](#tab-2--manage--merge-files)
+- [Auto-filter Rules](#auto-filter-rules)
 
-> ถ้าพิมพ์รหัสผิด 5 ครั้งติดต่อกัน ระบบจะล็อค 5 นาที
+---
+
+## Deployment & Setup
+
+Follow these steps to deploy this project to a new Google Apps Script account.
+
+### Step 1 — Copy the project files
+
+Copy all files into the new Google Apps Script project:
+
+| File | Type |
+|---|---|
+| `Code.gs` | Apps Script (server-side) |
+| `Index.html` | HTML template (Web App UI) |
+
+### Step 2 — Set Script Properties
+
+Go to **Project Settings → Script Properties** and add the following keys:
+
+| Key | Value |
+|---|---|
+| `USERNAME` | Login username (e.g. `admin`) |
+| `PASSWORD` | Login password |
+| `CLAUDE_API_KEY` | Your Anthropic Claude API key |
+| `FOLDER_ID` | Google Drive folder ID where source files are stored |
+
+> To get a folder ID: open the folder in Google Drive and copy the ID from the URL — the part after `/folders/`.
+
+### Step 3 — Deploy as Web App
+
+1. Click **Deploy → New deployment**
+2. Select type: **Web App**
+3. Set **Execute as:** `Me`
+4. Set **Who has access:** `Anyone` (or restrict as needed)
+5. Click **Deploy** and copy the Web App URL
+
+### Step 4 — First run
+
+Open the Web App URL in a browser, log in, then click **🔄 Sync** on Tab 1 or Tab 2 to load files from Drive.
+
+---
+
+## Login
+
+Open the Web App URL and enter the username and password set in Script Properties.
+
+> After 5 consecutive failed login attempts, the account is locked for 5 minutes.
 
 ---
 
 ## Tab 1 — 💬 AI Chat Bot
 
-ใช้สำหรับ **ถามคำถามเกี่ยวกับข้อมูลโปรโมชั่น** โดย AI จะอ่านข้อมูลจากไฟล์ที่เลือกแล้วตอบกลับเป็นภาษาไทย
+Use this tab to **ask questions about promotion data**. The AI reads the selected files and sheets, then answers in Thai (or the language of your question).
 
-### ขั้นตอนการใช้งาน
+### Workflow
 
 ```
-1. Sync ไฟล์  →  2. เลือกไฟล์  →  3. เลือก Sheet  →  4. พิมพ์คำถาม  →  5. กดส่ง
+1. Sync  →  2. Select Files  →  3. Select Sheets  →  4. Type Question  →  5. Send
 ```
 
 ---
 
-### ขั้นที่ 1 — Sync ไฟล์
+### Step 1 — Sync Files
 
-กดปุ่ม **🔄 Sync** (แถบซ้ายด้านล่าง) เพื่อดึงรายการไฟล์ล่าสุดจาก Google Drive
+Click **🔄 Sync** (bottom of the left sidebar) to fetch the latest file list from Google Drive.
 
-> ต้อง Sync ทุกครั้งที่มีการเพิ่ม/ลบไฟล์ใน Drive
-
----
-
-### ขั้นที่ 2 — เลือกไฟล์ข้อมูล
-
-- ติ๊ก ✅ ไฟล์ที่ต้องการให้ AI อ่าน (เลือกได้หลายไฟล์)
-- ใช้ช่อง **ค้นหาไฟล์...** เพื่อกรองรายชื่อ
-- กด **☑️ เลือก/ยกเลิกทั้งหมด** เพื่อเลือกหรือยกเลิกทีเดียว
+> Re-sync whenever files are added or removed from Drive.
 
 ---
 
-### ขั้นที่ 3 — เลือก Sheet
+### Step 2 — Select Files
 
-หลังเลือกไฟล์แล้ว รายการ Sheet จะโหลดขึ้นมาด้านล่างอัตโนมัติ
-
-- ติ๊ก ✅ Sheet ที่ต้องการ (เลือกได้หลาย Sheet)
-- ใช้ช่อง **ค้นหา Sheet...** เพื่อกรอง
-- กด **☑️ เลือก/ยกเลิก Sheet ทั้งหมด** เพื่อเลือกทีเดียว
+- Check ✅ one or more files for the AI to read
+- Use the **Search files...** box to filter the list
+- Click **☑️ Select / Deselect All** to toggle all at once
 
 ---
 
-### ขั้นที่ 4 — ถาม AI
+### Step 3 — Select Sheets
 
-พิมพ์คำถามในช่องด้านล่าง แล้วกด **ส่ง ➤** หรือกด `Enter`
+After selecting files, the sheet list loads automatically below.
 
-**ตัวอย่างคำถาม:**
-- `โปรโมชั่น iPhone มีอะไรบ้าง?`
-- `ราคาถูกที่สุดของ Samsung คือเท่าไหร่?`
-- `โปรโมชั่นที่มีสัญญา 24 เดือนมีกี่รายการ?`
-- `สรุปส่วนลดสูงสุดของแต่ละแบรนด์`
+- Check ✅ one or more sheets to include
+- Use the **Search Sheet...** box to filter
+- Click **☑️ Select / Deselect All Sheets** to toggle all at once
 
 ---
 
-### ฟีเจอร์เพิ่มเติม
+### Step 4 — Ask the AI
 
-| ปุ่ม / ฟีเจอร์ | หน้าที่ |
+Type your question in the input bar at the bottom, then press **Send ➤** or hit `Enter`.
+
+**Example questions:**
+- `What iPhone promotions are available?`
+- `What is the lowest price for Samsung?`
+- `How many promotions have a 24-month contract?`
+- `Summarize the maximum discount per brand`
+
+---
+
+### Additional Features
+
+| Button / Feature | Description |
 |---|---|
-| 📋 Copy (มุมขวาบนของคำตอบ) | คัดลอกคำตอบ AI ไปคลิปบอร์ด |
-| 🗑️ ล้าง | ล้างประวัติการสนทนาทั้งหมด |
-| 🌙 / ☀️ (มุมขวาบน) | สลับ Dark / Light Mode |
+| 📋 Copy (top-right of each AI reply) | Copy the AI's answer to clipboard |
+| 🗑️ Clear | Clear the entire chat history |
+| 🌙 / ☀️ (top-right of nav bar) | Toggle Dark / Light Mode |
 
-> **หมายเหตุ:** ถ้า AI ตอบช้าหรือ error เรื่อง rate limit ระบบจะแสดง countdown แล้วลองใหม่อัตโนมัติใน 60 วินาที
+> **Note:** If the AI hits a rate limit, a countdown banner will appear and the request will retry automatically after 60 seconds.
 
 ---
 
-## Tab 2 — 📦 จัดการ / รวมไฟล์
+## Tab 2 — 📦 Manage / Merge Files
 
-ใช้สำหรับ **รวมข้อมูลโปรโมชั่นจากหลายไฟล์** เข้าเป็น Google Sheet ไฟล์เดียว พร้อมกรองแถวขีดฆ่าและแถวว่างออกอัตโนมัติ
+Use this tab to **merge promotion data from multiple files** into a single Google Sheet, with strikethrough rows and empty rows filtered out automatically.
 
-### ภาพรวมขั้นตอน
+### Workflow
 
 ```
-1. เลือกไฟล์  →  2. ตั้งค่า (โฟลเดอร์ + ชื่อไฟล์)  →  3. จับคู่คอลัมน์  →  4. Preview  →  5. ยืนยันรวม
+1. Select Files  →  2. Configure Output  →  3. Map Columns  →  4. Preview  →  5. Confirm Merge
 ```
 
 ---
 
-### ขั้นที่ 1 — เลือกไฟล์และ Sync
+### Step 1 — Select Files & Sync
 
-**Sync Excel (ถ้ามีไฟล์ .xlsx ใน Drive):**
-กดปุ่ม **🔄 Sync Excel → Sheets** เพื่อแปลงไฟล์ Excel เป็น Google Sheets โดยอัตโนมัติ
+**Sync Excel files (if .xlsx files are in Drive):**
+Click **🔄 Sync Excel → Sheets** to automatically convert Excel files to Google Sheets.
 
-**เลือกไฟล์:**
-- ติ๊ก ✅ ไฟล์ที่ต้องการรวม (เลือกได้หลายไฟล์)
-- ใช้ช่อง **ค้นหาไฟล์...** เพื่อกรอง
-- กด 🔄 ข้างหัวข้อเพื่อรีเฟรชรายการไฟล์
+**Select files:**
+- Check ✅ one or more files to merge
+- Use the **Search files...** box to filter
+- Click 🔄 next to the section heading to refresh the file list
 
-เมื่อเลือกไฟล์แล้ว ระบบจะโหลด Sheet list ขึ้นมาให้เลือก Sheet ที่ต้องการรวม
+After selecting files, the system loads the available sheets for each file automatically.
 
 ---
 
-### ขั้นที่ 2 — ตั้งค่าการรวมไฟล์
+### Step 2 — Configure Output
 
-| ช่อง | คำอธิบาย |
+| Field | Description |
 |---|---|
-| **📁 บันทึกไปยังโฟลเดอร์** | เลือกโฟลเดอร์ปลายทางใน Drive |
-| **＋** (ข้างช่องโฟลเดอร์) | สร้างโฟลเดอร์ใหม่ได้เลย |
-| **✏️ ชื่อไฟล์ใหม่** | ตั้งชื่อไฟล์ผลลัพธ์ที่จะสร้าง |
+| **📁 Save to Folder** | Choose the destination folder in Drive |
+| **＋** (next to folder dropdown) | Create a new folder directly |
+| **✏️ Output File Name** | Name for the merged file to be created |
 
-จากนั้นกดปุ่ม **🚀 เริ่มรวมข้อมูลแบบ Advanced** เพื่อไปขั้นตอนจับคู่คอลัมน์
+Then click **🚀 Start Advanced Merge** to proceed to column mapping.
 
 ---
 
-### ขั้นที่ 3 — จับคู่คอลัมน์ (Mapping)
+### Step 3 — Map Columns
 
-หน้านี้จะแสดง **คอลัมน์ template** (ด้านซ้าย) และ **คอลัมน์จากไฟล์ต้นฉบับ** (แสดงเป็น chip)
+This screen shows **template columns** (left side) and **source columns from your files** (displayed as chips).
 
-**วิธีจับคู่:**
-- คลิก chip ชื่อคอลัมน์จากไฟล์ต้นฉบับ แล้วลากไปวางในช่องคอลัมน์ template ที่ต้องการ
-- คอลัมน์หนึ่งใน template สามารถรับได้หลาย source column (ระบบจะใช้ค่าแรกที่ไม่ว่าง)
+**How to map:**
+- Click a source column chip and drag it into the desired template column slot
+- One template column can accept multiple source columns — the system uses the first non-empty value
 
 **Default Values:**
-ถ้ามีคอลัมน์ template ที่ไม่มีข้อมูลใน source จะมีแบนเนอร์สีเหลืองให้กรอกค่า default
+If a template column has no matching source column, a yellow warning banner appears — fill in a default value or leave it blank.
 
-**Mapping Profile (บันทึกการตั้งค่า):**
+**Mapping Profiles (save your settings):**
 
-| ปุ่ม | หน้าที่ |
+| Button | Description |
 |---|---|
-| dropdown **-- เลือก Profile --** | โหลด profile ที่บันทึกไว้ก่อนหน้า |
-| **✅ ใช้** | Apply profile ที่เลือก |
-| **🗑️** | ลบ profile ที่เลือก |
-| ช่อง **ชื่อ Profile ใหม่...** + **💾 บันทึก** | บันทึก mapping ปัจจุบันเป็น profile ใหม่ |
-| **🔄 Reset** | ล้าง mapping ทั้งหมดกลับเป็นค่าเริ่มต้น |
+| **-- Select Profile --** dropdown | Load a previously saved mapping profile |
+| **✅ Apply** | Apply the selected profile |
+| **🗑️** | Delete the selected profile |
+| **Profile Name...** field + **💾 Save** | Save the current mapping as a new profile |
+| **🔄 Reset** | Clear all mappings back to default |
 
-> **แนะนำ:** บันทึก Mapping Profile ไว้ครั้งแรก ครั้งถัดไปไม่ต้องตั้งค่าใหม่
-
----
-
-### ขั้นที่ 4 — Preview ก่อนรวม
-
-กดปุ่ม **🔍 Preview ก่อนรวม** เพื่อดูตัวอย่างข้อมูล
-
-- แสดงสูงสุด **50 แถวแรก** (15 แถวต่อไฟล์)
-- แถวที่มีขีดฆ่า (strikethrough) จะถูกข้ามและไม่แสดง
-- แถวที่ไม่มีข้อมูล **แบรนด์และรุ่น** จะถูกกรองออก
-- ช่องว่างจะแสดงพื้นหลังสีเหลืองอ่อน
-- แบนเนอร์สีเหลืองด้านบนจะบอกจำนวนแถวที่ถูกข้าม
-
-กด **⬅️ กลับแก้ Mapping** หากต้องการปรับ mapping
+> **Tip:** Save a Mapping Profile after the first setup — you won't need to reconfigure it next time.
 
 ---
 
-### ขั้นที่ 5 — ยืนยันรวมข้อมูล
+### Step 4 — Preview
 
-กดปุ่ม **🚀 ยืนยันรวมข้อมูล** เพื่อสร้างไฟล์
+Click **🔍 Preview Before Merge** to see a sample of the output data.
 
-เมื่อเสร็จจะแสดงผลสรุป เช่น:
+- Shows up to **50 rows** (15 rows per file)
+- Strikethrough rows are excluded and will not appear
+- Rows with no **Brand & Model** value are filtered out
+- Empty cells are highlighted with a light yellow background
+- A yellow banner at the top shows the number of skipped rows
+
+Click **⬅️ Back to Edit Mapping** to adjust mappings if needed.
+
+---
+
+### Step 5 — Confirm Merge
+
+Click **🚀 Confirm Merge** to create the output file.
+
+When complete, a summary is shown, for example:
 ```
-รวมสำเร็จ: 320 แถว  |  ไฟล์: Promotion_March2026
-สรุป: จากทั้งหมด 380 แถว | ลบขีดฆ่า 45 แถว | ไม่มีแบรนด์/รุ่น 15 แถว
+Merged successfully: 320 rows  |  File: Promotion_March2026
+Summary: 380 total rows | 45 strikethrough removed | 15 missing Brand/Model
 ```
 
-พร้อมปุ่ม **🔗 เปิดไฟล์ใน Google Sheets** เพื่อเปิดไฟล์ผลลัพธ์ทันที
+A **🔗 Open in Google Sheets** link appears to open the result file immediately.
 
 ---
 
-## สิ่งที่ระบบกรองออกอัตโนมัติ
+## Auto-filter Rules
 
-| ประเภท | รายละเอียด |
+The system automatically removes the following rows during merge:
+
+| Type | Description |
 |---|---|
-| แถวขีดฆ่า (Strikethrough) | แถวที่มีข้อความขีดทับจะถูกตัดออกทั้งแถว |
-| แถวว่าง | แถวที่ทุก cell ว่างเปล่า |
-| แถวไม่มีแบรนด์/รุ่น | แถวที่คอลัมน์ "แบรนด์และรุ่น" ว่างเปล่า |
+| Strikethrough rows | Any row where text has strikethrough formatting is excluded entirely |
+| Empty rows | Rows where every cell is blank |
+| Missing Brand/Model | Rows where the "Brand & Model" column is empty |
