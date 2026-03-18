@@ -36,6 +36,13 @@ var TEMPLATE_HEADERS = [
   "Sale to date"
 ];
 
+/* คอลัมน์ส่วนลด: ถ้า cell ว่างให้เติม 0 อัตโนมัติ */
+var ZERO_FILL_HEADERS = [
+  "ส่วนลดค่าเครื่อง (บาท)",
+  "ส่วนลดค่าเครื่องเพิ่มเติม (บาท)",
+  "ส่วนลดค่าเครื่องเพิ่มเติม MNP (บาท)"
+];
+
 /* คอลัมน์ที่ใส่วันที่ปัจจุบันอัตโนมัติ (ถ้าไม่มีใน source) */
 var AUTO_DATE_HEADERS = ["Start Sale date", "Sale to date"];
 
@@ -506,6 +513,8 @@ function resolveValue_(templateCol, mapping, defaultValues, sourceHeaders, sourc
   // fallback default
   var def = defaultValues && defaultValues[templateCol];
   if (def !== undefined && def !== null && def !== "") return { value: def, found: false };
+  // คอลัมน์ส่วนลด: ว่าง → 0
+  if (ZERO_FILL_HEADERS.indexOf(templateCol) !== -1) return { value: 0, found: false };
   return { value: "", found: false };
 }
 
