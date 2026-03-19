@@ -1109,47 +1109,63 @@ function typhoonTextToPromo_(apiKey, ocrText, pageRange) {
     '=== OCR TEXT ===\n' + ocrText;
 
   var apiUrl = "https://api.opentyphoon.ai/v1/chat/completions";
-  var payload = {
-    model: "typhoon-v2.1-12b-instruct",
-    messages: [
-      { role: "system", content: systemMsg },
-      { role: "user",   content: userMsg }
-    ],
-    temperature: 0.1,
-    max_tokens: 8192
-  };
 
-  for (var attempt = 1; attempt <= 2; attempt++) {
-    try {
-      var res = UrlFetchApp.fetch(apiUrl, {
-        method: "post",
-        contentType: "application/json",
-        headers: { "Authorization": "Bearer " + apiKey },
-        payload: JSON.stringify(payload),
-        muteHttpExceptions: true
-      });
-      var code = res.getResponseCode();
-      var body = res.getContentText();
+  // ลอง model ทีละตัว (ใหม่สุดก่อน)
+  var models = [
+    "typhoon-v2.5-30b-a3b-instruct",
+    "typhoon-v2.1-12b-instruct",
+    "typhoon-v2-8b-instruct"
+  ];
 
-      if (code === 200) {
-        var json = JSON.parse(body);
-        var text = json.choices[0].message.content;
-        text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-        var rows = JSON.parse(text);
-        if (!Array.isArray(rows)) rows = [rows];
-        return { rows: rows, total: rows.length, model: "typhoon-v2.1-12b-instruct", method: "OCR+Typhoon" };
+  var lastError = "";
+  for (var m = 0; m < models.length; m++) {
+    var modelName = models[m];
+    var payload = {
+      model: modelName,
+      messages: [
+        { role: "system", content: systemMsg },
+        { role: "user",   content: userMsg }
+      ],
+      temperature: 0.1,
+      max_tokens: 8192
+    };
+
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        var res = UrlFetchApp.fetch(apiUrl, {
+          method: "post",
+          contentType: "application/json",
+          headers: { "Authorization": "Bearer " + apiKey },
+          payload: JSON.stringify(payload),
+          muteHttpExceptions: true
+        });
+        var code = res.getResponseCode();
+        var body = res.getContentText();
+
+        if (code === 200) {
+          var json = JSON.parse(body);
+          var text = json.choices[0].message.content;
+          text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+          var rows = JSON.parse(text);
+          if (!Array.isArray(rows)) rows = [rows];
+          return { rows: rows, total: rows.length, model: modelName, method: "OCR+Typhoon" };
+        }
+        if (code === 400) {
+          // Model not found → ลอง model ถัดไป
+          lastError = "HTTP 400 [" + modelName + "]: " + body.substring(0, 200);
+          break;
+        }
+        if (code === 429 && attempt < 2) { Utilities.sleep(5000); continue; }
+        lastError = "HTTP " + code + " [" + modelName + "]: " + body.substring(0, 200);
+        break;
+      } catch(e) {
+        lastError = modelName + ": " + e.message;
+        if (attempt < 2) { Utilities.sleep(3000); continue; }
+        break;
       }
-      if (code === 429 && attempt < 2) { Utilities.sleep(5000); continue; }
-      var errJson = {};
-      try { errJson = JSON.parse(body); } catch(pe) {}
-      return { error: "Typhoon API error (HTTP " + code + "): " +
-               (errJson.error ? (errJson.error.message || JSON.stringify(errJson.error)) : body.substring(0, 300)) };
-    } catch(e) {
-      if (attempt < 2) { Utilities.sleep(3000); continue; }
-      return { error: "Typhoon API error: " + e.message };
     }
   }
-  return { error: "Typhoon API ล้มเหลว" };
+  return { error: "Typhoon API ล้มเหลวทุก model — " + lastError };
 }
 
 
