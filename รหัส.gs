@@ -204,11 +204,8 @@ function syncExcelFiles(token) {
    ========================================== */
 function askAI(token, userQuestion, fileConfigs) {
   requireAuth_(token);
-  var props  = PropertiesService.getScriptProperties();
-  var apiKey = props.getProperty('GEMINI_API_KEY');
-  if (!apiKey || !apiKey.trim()) return "ไม่พบ GEMINI_API_KEY กรุณาตั้งค่าใน Script Properties";
 
-  var apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
+  var webhookUrl = "https://support.ww.co.th/ai1/webhook/a77c618c-deb5-4b9c-adee-2d47874a2ffe";
   var context = "";
   fileConfigs.forEach(function(cfg) {
     if (!isFileInAllowedFolder_(cfg.id)) return;
@@ -227,34 +224,26 @@ function askAI(token, userQuestion, fileConfigs) {
     });
   });
 
-  var prompt = [
-    "คุณคือ AI ผู้เชี่ยวชาญวิเคราะห์โปรโมชั่นมือถือ ตอบเป็นภาษาไทยเท่านั้น",
-    "",
-    "กฎการตอบ (ห้ามละเมิด):",
-    "1. ถ้าคำถามเกี่ยวข้องกับราคา / โปรโมชั่น / การเปรียบเทียบ → ต้องตอบด้วย HTML table เสมอ",
-    "2. โครงสร้าง table: <table class=\"result-table\"><thead><tr>...</tr></thead><tbody>...</tbody></table>",
-    "3. หัว column ใส่ใน <th> เช่น ชื่อโปรโมชั่น, ส่วนลดค่าเครื่อง (บาท), ราคาสุทธิ (บาท), ค่าบริการ/เดือน, สัญญา (เดือน)",
-    "4. แต่ละแถวข้อมูลใส่ใน <tr><td>...</td></tr>",
-    "5. หลังตาราง ใส่สรุปสั้น ๆ 2-3 บรรทัดใน <p> ว่าโปรไหนคุ้มที่สุดและทำไม",
-    "6. ห้ามใช้ Markdown, ห้ามใช้ | เป็นตาราง, ห้ามใช้ ```",
-    "7. ถ้าข้อมูลไม่เกี่ยวกับตาราง ให้ตอบเป็น <p> ธรรมดา",
-    "",
-    "ข้อมูล:",
-    context,
-    "",
-    "คำถาม: " + userQuestion
-  ].join("\n");
-
   try {
-    var res = UrlFetchApp.fetch(apiUrl, {
+    var res = UrlFetchApp.fetch(webhookUrl, {
       method: "post",
       contentType: "application/json",
-      payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      payload: JSON.stringify({
+        question: userQuestion,
+        context: context
+      }),
       muteHttpExceptions: true
     });
-    var json = JSON.parse(res.getContentText());
-    if (res.getResponseCode() === 200) return json.candidates[0].content.parts[0].text;
-    return "Error: " + (json.error ? json.error.message : "AI ไม่ตอบสนอง");
+    var raw = res.getContentText();
+    if (res.getResponseCode() !== 200) return "Error: n8n ตอบกลับ " + res.getResponseCode() + " — " + raw;
+    if (!raw || !raw.trim()) return "Error: n8n ไม่ส่งข้อมูลกลับมา (empty response)";
+    // ลองแกะ JSON ก่อน ถ้าไม่ใช่ JSON ให้ใช้ raw text ตรงๆ
+    try {
+      var json = JSON.parse(raw);
+      return json.output || json.text || json.answer || json.message || JSON.stringify(json);
+    } catch(e) {
+      return raw; // plain text response
+    }
   } catch(e) {
     return "Error: " + e.message;
   }
