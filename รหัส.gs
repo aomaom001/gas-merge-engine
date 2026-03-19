@@ -205,10 +205,10 @@ function syncExcelFiles(token) {
 function askAI(token, userQuestion, fileConfigs) {
   requireAuth_(token);
   var props  = PropertiesService.getScriptProperties();
-  var apiKey = props.getProperty('GEMINI_API_KEY');
-  if (!apiKey || !apiKey.trim()) return "ไม่พบ GEMINI_API_KEY กรุณาตั้งค่าใน Script Properties";
+  var apiKey = props.getProperty('TYPHOON_API_KEY');
+  if (!apiKey || !apiKey.trim()) return "ไม่พบ TYPHOON_API_KEY กรุณาตั้งค่าใน Script Properties";
 
-  var apiUrl  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
+  var apiUrl = "https://api.opentyphoon.ai/v1/chat/completions";
   var context = "";
   fileConfigs.forEach(function(cfg) {
     if (!isFileInAllowedFolder_(cfg.id)) return;
@@ -225,14 +225,30 @@ function askAI(token, userQuestion, fileConfigs) {
 
   var prompt = "คุณคือ AI วิเคราะห์โปรโมชั่น\n\nข้อมูล:\n" + context +
     "\n\nคำถาม: " + userQuestion + "\n\nตอบเป็นภาษาไทย ใช้ตาราง HTML ในกรณีจำเป็น ห้ามใช้ Markdown";
-  var res  = UrlFetchApp.fetch(apiUrl, {
-    method: "post", contentType: "application/json",
-    payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    muteHttpExceptions: true
-  });
-  var json = JSON.parse(res.getContentText());
-  if (res.getResponseCode() === 200) return json.candidates[0].content.parts[0].text;
-  return "Error: " + (json.error ? json.error.message : "AI ไม่ตอบสนอง");
+
+  var models = ["typhoon-v2.5-30b-a3b-instruct", "typhoon-v2.1-12b-instruct", "typhoon-v2-8b-instruct"];
+  var lastError = "";
+  for (var i = 0; i < models.length; i++) {
+    try {
+      var res = UrlFetchApp.fetch(apiUrl, {
+        method: "post",
+        contentType: "application/json",
+        headers: { "Authorization": "Bearer " + apiKey },
+        payload: JSON.stringify({
+          model: models[i],
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: 8192
+        }),
+        muteHttpExceptions: true
+      });
+      var json = JSON.parse(res.getContentText());
+      if (res.getResponseCode() === 200) return json.choices[0].message.content;
+      lastError = json.error ? json.error.message : res.getContentText();
+    } catch(e) {
+      lastError = e.message;
+    }
+  }
+  return "Error: Typhoon API ล้มเหลวทุก model — " + lastError;
 }
 
 /* ==========================================
