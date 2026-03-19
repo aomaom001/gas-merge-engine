@@ -205,10 +205,10 @@ function syncExcelFiles(token) {
 function askAI(token, userQuestion, fileConfigs) {
   requireAuth_(token);
   var props  = PropertiesService.getScriptProperties();
-  var apiKey = props.getProperty('GPT_API_KEY');
-  if (!apiKey || !apiKey.trim()) return "ไม่พบ GPT_API_KEY กรุณาตั้งค่าใน Script Properties";
+  var apiKey = props.getProperty('GEMINI_API_KEY');
+  if (!apiKey || !apiKey.trim()) return "ไม่พบ GEMINI_API_KEY กรุณาตั้งค่าใน Script Properties";
 
-  var apiUrl = "https://api.openai.com/v1/chat/completions";
+  var apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
   var context = "";
   fileConfigs.forEach(function(cfg) {
     if (!isFileInAllowedFolder_(cfg.id)) return;
@@ -249,17 +249,12 @@ function askAI(token, userQuestion, fileConfigs) {
     var res = UrlFetchApp.fetch(apiUrl, {
       method: "post",
       contentType: "application/json",
-      headers: { "Authorization": "Bearer " + apiKey },
-      payload: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 4096
-      }),
+      payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
       muteHttpExceptions: true
     });
     var json = JSON.parse(res.getContentText());
-    if (res.getResponseCode() === 200) return json.choices[0].message.content;
-    return "Error: " + (json.error ? json.error.message : res.getContentText());
+    if (res.getResponseCode() === 200) return json.candidates[0].content.parts[0].text;
+    return "Error: " + (json.error ? json.error.message : "AI ไม่ตอบสนอง");
   } catch(e) {
     return "Error: " + e.message;
   }
