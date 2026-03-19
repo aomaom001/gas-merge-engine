@@ -28,26 +28,49 @@
 
       /* LOGIN */
       #login-page{display:flex;justify-content:center;align-items:center;height:100vh;width:100vw;background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 50%,#0f172a 100%);position:relative;overflow:hidden}
-      #login-page::before{content:'';position:absolute;width:500px;height:500px;background:radial-gradient(circle,rgba(59,130,246,0.15) 0%,transparent 70%);top:-100px;right:-100px;border-radius:50%}
-      #login-page::after{content:'';position:absolute;width:400px;height:400px;background:radial-gradient(circle,rgba(245,158,11,0.1) 0%,transparent 70%);bottom:-100px;left:-100px;border-radius:50%}
-      .login-box{background:rgba(255,255,255,0.05);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);padding:48px 40px;border-radius:20px;width:100%;max-width:400px;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.4);z-index:1;position:relative;animation:fadeInUp .6s ease-out}
+      #login-page::before{content:'';position:absolute;width:500px;height:500px;background:radial-gradient(circle,rgba(59,130,246,0.15) 0%,transparent 70%);top:-100px;right:-100px;border-radius:50%;z-index:0}
+      #login-page::after{content:'';position:absolute;width:400px;height:400px;background:radial-gradient(circle,rgba(245,158,11,0.1) 0%,transparent 70%);bottom:-100px;left:-100px;border-radius:50%;z-index:0}
+      /* SCROLL VELOCITY BANDS */
+      .sv-wrapper{position:absolute;inset:0;z-index:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-evenly;overflow:hidden}
+      .sv-band{overflow:hidden;padding:8px 0}
+      .sv-track{display:flex;white-space:nowrap;will-change:transform;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.2))}
+      .sv-track span{flex-shrink:0;font-size:2.25rem;font-weight:700;letter-spacing:-0.02em;font-family:'Prompt','Segoe UI',sans-serif;padding:0 28px}
+      .sv-blue span{color:rgba(59,130,246,0.13)}
+      .sv-gold span{color:rgba(245,158,11,0.11)}
+      @media(min-width:768px){.sv-track span{font-size:4rem;line-height:4.5rem}}
+      .login-box{background:rgba(15,23,42,0.6);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);border:1px solid rgba(255,255,255,0.07);padding:56px 52px;border-radius:24px;width:100%;max-width:500px;text-align:center;box-shadow:0 40px 80px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.07);z-index:1;position:relative;animation:fadeInUp .6s ease-out}
       @keyframes fadeInUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
-      .login-box h3{color:var(--text-white);font-size:24px;font-weight:600;margin-bottom:8px}
-      .login-box .subtitle{color:var(--text-light);font-size:14px;margin-bottom:32px;font-weight:300}
-      .login-box .logo{font-size:48px;margin-bottom:16px;display:block}
-      .login-input{width:100%;padding:14px 16px;margin-bottom:14px;border:1px solid rgba(255,255,255,0.15);border-radius:10px;background:rgba(255,255,255,0.08);color:var(--text-white);font-family:'Prompt',sans-serif;font-size:14px;outline:none;transition:all .3s}
-      .login-input::placeholder{color:rgba(255,255,255,0.4)}.login-input:focus{border-color:var(--accent);background:rgba(255,255,255,0.12)}
-      #login-error{color:#fca5a5;font-size:13px;margin-bottom:10px;min-height:20px}
+      .login-logo-icon{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,rgba(59,130,246,0.25),rgba(99,102,241,0.25));border:1px solid rgba(99,102,241,0.35);color:#f8fafc;font-size:22px;font-weight:800;letter-spacing:-1px;margin-bottom:28px;box-shadow:0 8px 28px rgba(59,130,246,0.2)}
+      /* TRUE FOCUS (Login title) */
+      .focus-container{position:relative;display:flex;gap:0.45em;justify-content:center;align-items:center;flex-wrap:nowrap;outline:none;user-select:none;margin-bottom:10px}
+      .focus-word{position:relative;font-size:26px;font-weight:700;letter-spacing:0.06em;color:#f8fafc;cursor:default;user-select:none}
+      .focus-frame{position:absolute;top:0;left:0;pointer-events:none;box-sizing:content-box;opacity:0;transition:left .45s ease,top .45s ease,width .45s ease,height .45s ease,opacity .3s ease}
+      .tf-corner{position:absolute;width:.65rem;height:.65rem;border:2px solid var(--tf-color,#6366f1);filter:drop-shadow(0 0 5px var(--tf-glow,rgba(99,102,241,.7)));border-radius:2px}
+      .tf-tl{top:-7px;left:-7px;border-right:none;border-bottom:none}
+      .tf-tr{top:-7px;right:-7px;border-left:none;border-bottom:none}
+      .tf-bl{bottom:-7px;left:-7px;border-right:none;border-top:none}
+      .tf-br{bottom:-7px;right:-7px;border-left:none;border-top:none}
+      .login-divider{width:36px;height:2px;background:linear-gradient(90deg,transparent,rgba(99,102,241,0.8),transparent);margin:0 auto 20px}
+      .login-box .subtitle{color:rgba(255,255,255,0.38);font-size:13px;margin-bottom:36px;font-weight:300;letter-spacing:0.02em}
+      .login-field{text-align:left;margin-bottom:18px}
+      .login-label{display:block;font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px}
+      .login-input{width:100%;padding:14px 18px;margin-bottom:0;border:1px solid rgba(255,255,255,0.09);border-radius:10px;background:rgba(255,255,255,0.05);color:#f8fafc;font-family:'Prompt',sans-serif;font-size:14px;outline:none;transition:all .25s}
+      .login-input::placeholder{color:rgba(255,255,255,0.22)}.login-input:focus{border-color:rgba(99,102,241,0.55);background:rgba(99,102,241,0.07);box-shadow:0 0 0 3px rgba(99,102,241,0.12)}
+      #login-error{color:#fca5a5;font-size:13px;margin-bottom:14px;min-height:20px}
+      .btn-login{background:linear-gradient(135deg,#3b82f6,#6366f1);color:white;width:100%;padding:15px;font-size:14px;font-weight:600;border-radius:10px;margin-top:10px;letter-spacing:0.04em;box-shadow:0 4px 20px rgba(99,102,241,0.4);transition:all .25s;border:none;cursor:pointer;font-family:'Prompt',sans-serif}
+      .btn-login:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(99,102,241,0.5)}
+      .btn-login:active{transform:translateY(0)}.btn-login:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
       /* MAIN APP */
       #main-app{display:none;width:100vw;height:100vh;flex-direction:column;background:var(--bg-page);transition:background .3s}
-      .nav-bar{background:var(--bg-dark);display:flex;align-items:center;width:100%;flex-shrink:0;padding:0 16px;box-shadow:0 2px 10px rgba(0,0,0,0.2);position:relative;z-index:10}
-      .nav-item{padding:16px 24px;color:var(--text-light);cursor:pointer;font-weight:500;font-size:14px;transition:all .3s;position:relative;border:none;background:none}
-      .nav-item:hover{color:var(--text-white)}.nav-item.active{color:var(--accent-gold)}
-      .nav-item.active::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:60%;height:3px;background:var(--accent-gold);border-radius:3px 3px 0 0}
+      .nav-bar{background:#09090b;display:flex;align-items:center;gap:4px;width:100%;flex-shrink:0;padding:8px 20px;border-bottom:1px solid rgba(255,255,255,0.06);position:relative;z-index:10}
+      .nav-item{padding:9px 20px;color:rgba(255,255,255,0.45);cursor:pointer;font-weight:500;font-size:13px;transition:all .2s;position:relative;border:none;background:none;border-radius:8px;letter-spacing:0.01em}
+      .nav-item:hover{color:rgba(255,255,255,0.85);background:rgba(255,255,255,0.05)}
+      .nav-item.active{color:#fff;background:rgba(255,255,255,0.08)}
+      .nav-item.active::after{display:none}
       .nav-spacer{flex:1}
-      .nav-toggle{background:none;border:1px solid rgba(255,255,255,0.2);color:var(--text-light);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:16px;transition:all .3s;font-family:'Prompt',sans-serif}
-      .nav-toggle:hover{background:rgba(255,255,255,0.1);color:var(--text-white);border-color:rgba(255,255,255,0.4)}
+      .nav-toggle{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.5);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;transition:all .2s;font-family:'Prompt',sans-serif;letter-spacing:0.02em}
+      .nav-toggle:hover{background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.15)}
       .page{display:none;padding:20px;flex:1;overflow:hidden;min-height:0}.page.active{display:flex;flex-direction:column}
 
       /* CHAT */
@@ -66,12 +89,12 @@
       .btn-purple{background:var(--accent-purple);color:white}
       .btn-green{background:var(--accent-green);color:white}.btn-red{background:var(--accent-red);color:white}
       .btn-gray{background:#64748b;color:white;font-size:11px;padding:6px 10px}
-      .btn-login{background:linear-gradient(135deg,var(--accent),#6366f1);color:white;width:100%;padding:14px;font-size:15px;font-weight:600;border-radius:10px;margin-top:8px}
       .input-field{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:8px;font-family:'Prompt',sans-serif;font-size:14px;outline:none;transition:all .3s;background:var(--bg-input);color:var(--text-primary)}
       .input-field:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,0.1)}select.input-field{cursor:pointer}
       .search-box{margin-bottom:8px;position:relative}
       .search-box .input-field{padding-left:36px;font-size:13px;height:38px}
-      .search-box::before{content:'🔍';position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;opacity:0.6;z-index:1}
+      .search-box::before{content:'';position:absolute;left:12px;top:50%;transform:translateY(-50%);width:14px;height:14px;border:2px solid currentColor;border-radius:50%;opacity:0.35;z-index:1}
+      .search-box::after{content:'';position:absolute;left:26px;top:calc(50% + 6px);width:5px;height:2px;background:currentColor;opacity:0.35;transform:rotate(45deg);z-index:1}
       .chat-column{display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden}
       #chat{flex:1;overflow-y:auto;padding:20px;min-height:0;background:var(--bg-card);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:12px;transition:background .3s}
       .chat-input-bar{display:flex;gap:8px;flex-shrink:0}.chat-input-bar .input-field{margin:0}
@@ -94,9 +117,9 @@
 
       /* EMPTY STATE */
       .empty-state{text-align:center;padding:32px 16px;color:var(--text-secondary)}
-      .empty-state .empty-icon{font-size:40px;margin-bottom:12px}
+      .empty-state .empty-icon{font-size:28px;margin-bottom:10px;opacity:0.4;font-weight:300}
       .empty-state p{font-size:13px;line-height:1.6}
-      .empty-state .arrow-hint{color:var(--accent-orange);font-weight:600;font-size:14px;margin-top:8px}
+      .empty-state .arrow-hint{color:var(--text-secondary);font-weight:500;font-size:13px;margin-top:8px;opacity:0.7}
 
       /* LOADING OVERLAY */
       #loading-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.85);backdrop-filter:blur(4px);z-index:9999;flex-direction:column;justify-content:center;align-items:center}
@@ -198,11 +221,11 @@
     <!-- FOLDER MODAL -->
     <div id="folder-modal">
       <div class="modal-box">
-        <h3>📁 สร้างโฟลเดอร์ใหม่</h3>
-        <input type="text" id="newFolderName" class="input-field" placeholder="ชื่อโฟลเดอร์ใหม่..." style="margin-bottom:16px;">
+        <h3>Create New Folder</h3>
+        <input type="text" id="newFolderName" class="input-field" placeholder="Folder name..." style="margin-bottom:16px;">
         <div style="display:flex;gap:10px;">
-          <button onclick="submitNewFolder()" class="btn btn-green" style="flex:1;">✅ สร้าง</button>
-          <button onclick="closeFolderModal()" class="btn btn-gray" style="flex:1;font-size:13px;">❌ ยกเลิก</button>
+          <button onclick="submitNewFolder()" class="btn btn-green" style="flex:1;">Create</button>
+          <button onclick="closeFolderModal()" class="btn btn-gray" style="flex:1;font-size:13px;">Cancel</button>
         </div>
       </div>
     </div>
@@ -210,10 +233,10 @@
     <!-- CONFIRM OVERWRITE MODAL -->
     <div id="confirm-modal">
       <div class="modal-box">
-        <h3>⚠️ ชื่อไฟล์ซ้ำ</h3>
-        <p id="confirm-modal-msg">มีไฟล์ชื่อนี้อยู่แล้วในโฟลเดอร์ที่เลือก ต้องการสร้างทับหรือไม่?</p>
+        <h3>Duplicate File Name</h3>
+        <p id="confirm-modal-msg">A file with this name already exists. Overwrite?</p>
         <div style="display:flex;gap:10px;">
-          <button id="confirm-ok-btn" class="btn btn-red" style="flex:1;">🗑️ สร้างทับ</button>
+          <button id="confirm-ok-btn" class="btn btn-red" style="flex:1;">Overwrite</button>
           <button onclick="closeConfirmModal()" class="btn btn-gray" style="flex:1;font-size:13px;">ยกเลิก</button>
         </div>
       </div>
@@ -221,63 +244,71 @@
 
     <!-- LOGIN PAGE -->
     <div id="login-page">
+      <div class="sv-wrapper" id="svWrapper"></div>
       <div class="login-box">
-        <span class="logo">🤖</span>
-        <h3>AI CHAT PROMOTION</h3>
-        <p class="subtitle">เข้าสู่ระบบเพื่อจัดการข้อมูลโปรโมชั่น</p>
+        <div class="login-logo-icon">AI</div>
+        <div id="trueFocus" class="focus-container"></div>
+        <div class="login-divider"></div>
+        <p class="subtitle">Sign in to your account</p>
         <div id="login-error"></div>
-        <input type="text" id="user" class="login-input" placeholder="👤  Username">
-        <input type="password" id="pass" class="login-input" placeholder="🔒  Password" onkeypress="if(event.keyCode==13) checkLogin(document.getElementById('loginBtn'))">
-        <button id="loginBtn" onclick="checkLogin(this)" class="btn btn-login">เข้าสู่ระบบ</button>
+        <div class="login-field">
+          <label class="login-label">Username</label>
+          <input type="text" id="user" class="login-input" placeholder="Enter your username">
+        </div>
+        <div class="login-field">
+          <label class="login-label">Password</label>
+          <input type="password" id="pass" class="login-input" placeholder="Enter your password" onkeypress="if(event.keyCode==13) checkLogin(document.getElementById('loginBtn'))">
+        </div>
+        <button id="loginBtn" onclick="checkLogin(this)" class="btn btn-login">Sign In</button>
       </div>
     </div>
 
     <!-- MAIN APP -->
     <div class="container" id="main-app">
       <div class="nav-bar">
-        <div id="tab1" class="nav-item active" onclick="showPage('chat-page','tab1')">💬 AI Chat Bot</div>
-        <div id="tab2" class="nav-item" onclick="showPage('merge-page','tab2')">📦 จัดการ / รวมไฟล์</div>
-        <div id="tab3" class="nav-item" onclick="showPage('update-page','tab3')">📄 PDF Extract</div>
+        <div id="tab1" class="nav-item active" onclick="showPage('chat-page','tab1')">AI Chat</div>
+        <div id="tab2" class="nav-item" onclick="showPage('merge-page','tab2')">Merge Files</div>
+        <div id="tab3" class="nav-item" onclick="showPage('update-page','tab3')">PDF Extract</div>
         <div class="nav-spacer"></div>
-        <button class="nav-toggle" id="darkToggle" onclick="toggleDarkMode()" title="สลับ Dark Mode">🌙</button>
+        <button class="nav-toggle" id="darkToggle" onclick="toggleDarkMode()" title="Toggle theme">Dark</button>
       </div>
 
       <!-- ==================== CHAT PAGE ==================== -->
       <div id="chat-page" class="page active">
         <div class="chat-layout">
           <div class="chat-sidebar">
-            <span class="sidebar-label">📄 เลือกไฟล์ข้อมูล</span>
+            <span class="sidebar-label">Files</span>
             <div class="search-box">
-              <input type="text" id="fileSearch" class="input-field" placeholder="ค้นหาไฟล์..." oninput="filterCheckList('fileSearch','fileCheckArea')">
+              <input type="text" id="fileSearch" class="input-field" placeholder="Search files..." oninput="filterCheckList('fileSearch','fileCheckArea')">
             </div>
             <div id="fileCheckArea" class="check-area">
               <div class="empty-state">
-                <div class="empty-icon">📂</div>
-                <p>ยังไม่มีไฟล์<br>กด Sync เพื่อดึงข้อมูลจาก Drive</p>
-                <div class="arrow-hint">↓ กด Sync ด้านล่าง</div>
+                <div class="empty-icon">--</div>
+                <p>No files yet<br>Click Sync to fetch from Drive</p>
+                <div class="arrow-hint">Sync below</div>
               </div>
             </div>
             <div style="display:flex;gap:8px;">
-              <button onclick="toggleAllFiles()" class="btn btn-gray" style="flex:1;">☑️ เลือก/ยกเลิกทั้งหมด</button>
-              <button id="syncBtn" onclick="syncFiles(this)" class="btn btn-orange" style="flex:1;font-size:12px;padding:8px;">🔄 Sync</button>
+              <button onclick="toggleAllFiles()" class="btn btn-gray" style="flex:1;">Toggle All</button>
+              <button id="syncBtn" onclick="syncFiles(this)" class="btn btn-orange" style="flex:1;font-size:12px;padding:8px;">Sync</button>
             </div>
-            <span class="sidebar-label">📋 เลือก Sheet</span>
+            <span class="sidebar-label">Sheets</span>
             <div class="search-box">
-              <input type="text" id="sheetSearch" class="input-field" placeholder="ค้นหา Sheet..." oninput="filterCheckList('sheetSearch','sheetSelectArea')">
+              <input type="text" id="sheetSearch" class="input-field" placeholder="Search sheets..." oninput="filterCheckList('sheetSearch','sheetSelectArea')">
             </div>
             <div id="sheetSelectArea" class="check-area">
-              <p style="color:var(--text-secondary);margin:0;font-size:13px;">เลือกไฟล์ก่อน</p>
+              <p style="color:var(--text-secondary);margin:0;font-size:13px;">Select a file first</p>
             </div>
-            <button onclick="toggleAllSheets()" class="btn btn-gray" style="width:100%;">☑️ เลือก/ยกเลิก Sheet ทั้งหมด</button>
+            <button onclick="toggleAllSheets()" class="btn btn-gray" style="width:100%;">Toggle All Sheets</button>
             <!-- [FIX] Context info bar แสดงจำนวนแถวที่จะส่ง AI -->
             <div id="contextInfo" class="context-info"></div>
           </div>
           <div class="chat-column">
             <div id="chat"></div>
             <div class="chat-input-bar">
-              <input type="text" id="q" class="input-field" placeholder="พิมพ์คำถามที่นี่..." onkeypress="if(event.keyCode==13) ask()">
-              <button id="askBtn" onclick="ask()" class="btn btn-primary" style="width:90px;">ส่ง ➤</button>
-              <button onclick="clearChat()" class="btn btn-red" style="width:90px;">🗑️ ล้าง</button>
+              <input type="text" id="q" class="input-field" placeholder="Type your question..." onkeypress="if(event.keyCode==13) ask()">
+              <button id="askBtn" onclick="ask()" class="btn btn-primary" style="width:90px;">Send</button>
+              <button onclick="clearChat()" class="btn btn-red" style="width:90px;">Clear</button>
             </div>
           </div>
         </div>
@@ -287,48 +318,48 @@
       <div id="merge-page" class="page">
         <div class="merge-container">
           <div class="merge-section">
-            <h3>📂 1. เลือกไฟล์และกำหนดหัวตาราง <span class="refresh-icon" onclick="loadMenus()" title="รีเฟรชไฟล์">🔄</span></h3>
+            <h3>1. Select Files <span class="refresh-icon" onclick="loadMenus()" title="Refresh files">&#8635;</span></h3>
             <div style="display:flex;gap:8px;margin-bottom:12px;">
-              <button onclick="syncFiles(this)" class="btn btn-orange" style="flex:1;font-size:12px;padding:8px;">🔄 Sync Excel → Sheets</button>
+              <button onclick="syncFiles(this)" class="btn btn-orange" style="flex:1;font-size:12px;padding:8px;">Sync Excel to Sheets</button>
             </div>
             <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-              <input type="text" id="mergeSearch" class="input-field" placeholder="ค้นหาไฟล์..." oninput="filterCheckList('mergeSearch','multiFileSelect')" style="flex:1;">
-              <button onclick="toggleSelectAllFiles(this)" class="btn" style="font-size:11px;padding:6px 12px;white-space:nowrap;">☑ เลือกทั้งหมด</button>
+              <input type="text" id="mergeSearch" class="input-field" placeholder="Search files..." oninput="filterCheckList('mergeSearch','multiFileSelect')" style="flex:1;">
+              <button onclick="toggleSelectAllFiles(this)" class="btn" style="font-size:11px;padding:6px 12px;white-space:nowrap;">Select All</button>
             </div>
             <div id="multiFileSelect" class="check-area" style="flex:1;max-height:none;">
               <div class="empty-state">
-                <div class="empty-icon">📂</div>
-                <p>ยังไม่มีไฟล์<br>กด Sync ด้านบนเพื่อดึงข้อมูล</p>
+                <div class="empty-icon">--</div>
+                <p>No files yet<br>Click Sync above to fetch data</p>
               </div>
             </div>
           </div>
 
           <div class="merge-section" style="display:flex;flex-direction:column;">
-            <h3>⚙️ 2. ตั้งค่าการรวมไฟล์</h3>
+            <h3>2. Configuration</h3>
             <div style="flex:1;overflow-y:auto;">
-              <label class="sidebar-label" style="display:block;margin-top:0;">📁 บันทึกไปยังโฟลเดอร์</label>
+              <label class="sidebar-label" style="display:block;margin-top:0;">Destination Folder</label>
               <div class="folder-row">
                 <select id="folderSelect" class="input-field"></select>
-                <button onclick="openFolderModal()" class="btn btn-orange" title="สร้างโฟลเดอร์ใหม่">＋</button>
-                <span class="refresh-icon" onclick="loadFolders()" title="รีเฟรชโฟลเดอร์">🔄</span>
+                <button onclick="openFolderModal()" class="btn btn-orange" title="New folder">+</button>
+                <span class="refresh-icon" onclick="loadFolders()" title="Refresh folders">&#8635;</span>
               </div>
-              <label class="sidebar-label" style="display:block;margin-top:4px;">✏️ ชื่อไฟล์ใหม่</label>
-              <input type="text" id="mergedFileName" class="input-field" placeholder="ชื่อไฟล์หลังรวม..." style="margin-bottom:16px;">
+              <label class="sidebar-label" style="display:block;margin-top:4px;">Output File Name</label>
+              <input type="text" id="mergedFileName" class="input-field" placeholder="Merged file name..." style="margin-bottom:16px;">
 
               <div id="mergeSummary" style="padding:16px;background:var(--bg-check);border-radius:8px;display:none;">
-                <b style="font-size:13px;color:var(--accent);">📌 สรุปรายการที่จะรวม:</b>
+                <b style="font-size:13px;color:var(--accent);">Summary</b>
                 <div id="summaryContent" style="font-size:12px;margin-top:8px;line-height:1.6;"></div>
               </div>
 
-              <!-- [FIX] Merge result banner พร้อม link -->
+              <!-- Merge result banner -->
               <div id="mergeResultBanner" class="merge-result-banner">
-                <b style="color:#065f46;font-size:13px;">✅ รวมสำเร็จ!</b>
+                <b style="color:#065f46;font-size:13px;">Merge Complete</b>
                 <div style="margin-top:6px;font-size:12px;color:#065f46;" id="mergeResultMsg"></div>
-                <a id="mergeResultLink" href="#" target="_blank" style="display:inline-block;margin-top:8px;">🔗 เปิดไฟล์ใน Google Sheets</a>
+                <a id="mergeResultLink" href="#" target="_blank" style="display:inline-block;margin-top:8px;">Open in Google Sheets</a>
               </div>
             </div>
 
-            <button onclick="processMerge(this)" class="btn btn-green" style="width:100%;margin-top:20px;padding:14px;font-size:15px;font-weight:600;">🚀 เริ่มรวมข้อมูลแบบ Advanced</button>
+            <button onclick="processMerge(this)" class="btn btn-green" style="width:100%;margin-top:20px;padding:14px;font-size:15px;font-weight:600;">Start Advanced Merge</button>
           </div>
         </div>
       </div>
@@ -339,31 +370,31 @@
 
           <!-- TOP BAR -->
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:2px solid var(--accent);padding-bottom:10px;flex-shrink:0;">
-            <h3 style="margin:0;">🎯 ขั้นตอนที่ 3: จับคู่คอลัมน์</h3>
+            <h3 style="margin:0;">3. Column Mapping</h3>
             <div style="display:flex;gap:8px;">
-              <button onclick="resetAllMappings()" class="btn btn-gray" style="font-size:12px;">🔄 Reset</button>
-              <button onclick="hideMappingPage()" class="btn btn-gray" style="font-size:12px;">⬅️ กลับ</button>
+              <button onclick="resetAllMappings()" class="btn btn-gray" style="font-size:12px;">Reset</button>
+              <button onclick="hideMappingPage()" class="btn btn-gray" style="font-size:12px;">Back</button>
             </div>
           </div>
 
           <!-- PROFILE TOOLBAR -->
           <div style="display:flex;gap:10px;margin-bottom:10px;flex-shrink:0;align-items:center;flex-wrap:wrap;">
-            <div style="font-size:11px;font-weight:700;color:var(--accent-purple);white-space:nowrap;">💾 Mapping Profile</div>
+            <div style="font-size:11px;font-weight:700;color:var(--accent-purple);white-space:nowrap;">Mapping Profile</div>
             <select id="profileSelect" class="input-field" style="flex:1;min-width:160px;height:34px;font-size:12px;padding:0 8px;" onchange="onProfileSelectChange()">
-              <option value="">-- เลือก Profile --</option>
+              <option value="">-- Select Profile --</option>
             </select>
-            <button onclick="applyProfile()" class="btn btn-primary" style="height:34px;padding:0 12px;font-size:12px;">✅ ใช้</button>
-            <button onclick="deleteProfile()" class="btn btn-red" style="height:34px;padding:0 10px;font-size:12px;">🗑️</button>
+            <button onclick="applyProfile()" class="btn btn-primary" style="height:34px;padding:0 12px;font-size:12px;">Apply</button>
+            <button onclick="deleteProfile()" class="btn btn-red" style="height:34px;padding:0 10px;font-size:12px;">Delete</button>
             <div style="width:1px;height:24px;background:var(--border);"></div>
-            <input type="text" id="profileNameInput" class="input-field" placeholder="ชื่อ Profile ใหม่..." style="flex:1;min-width:140px;height:34px;font-size:12px;padding:0 10px;">
-            <button onclick="saveProfile(this)" class="btn btn-green" style="height:34px;padding:0 12px;font-size:12px;">💾 บันทึก</button>
+            <input type="text" id="profileNameInput" class="input-field" placeholder="New profile name..." style="flex:1;min-width:140px;height:34px;font-size:12px;padding:0 10px;">
+            <button onclick="saveProfile(this)" class="btn btn-green" style="height:34px;padding:0 12px;font-size:12px;">Save</button>
             <div id="profileMsg" style="font-size:11px;color:var(--accent-green);white-space:nowrap;"></div>
             <div id="autoDetectResults" style="display:none;"></div>
           </div>
 
           <!-- DEFAULT VALUES PANEL — แสดงเฉพาะ col ที่ไม่มีใน source -->
           <div id="defaultValuesPanel" style="display:none;background:#fef9ec;border:1px solid #f59e0b;border-radius:10px;padding:12px 16px;margin-bottom:10px;flex-shrink:0;">
-            <div style="font-size:11px;font-weight:700;color:#b45309;margin-bottom:8px;">⚠️ คอลัมน์ต่อไปนี้ไม่พบใน source — กรุณากำหนดค่า default (หรือเว้นว่างถ้าไม่ต้องการ)</div>
+            <div style="font-size:11px;font-weight:700;color:#b45309;margin-bottom:8px;">Columns below were not found in source — set default values or leave blank</div>
             <div id="defaultValuesList" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
           </div>
 
@@ -373,8 +404,8 @@
           </div>
 
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0;align-items:center;">
-            <span style="font-size:12px;color:var(--text-secondary);">💡 คอลัมน์ที่ไม่ได้จับคู่จะเว้นว่างในผลลัพธ์</span>
-            <button id="previewBtn" onclick="openPreview(this)" class="btn btn-primary" style="margin-left:auto;padding:12px 28px;font-size:15px;font-weight:600;">🔍 Preview ก่อนรวม</button>
+            <span style="font-size:12px;color:var(--text-secondary);">Unmapped columns will be left blank in the result</span>
+            <button id="previewBtn" onclick="openPreview(this)" class="btn btn-primary" style="margin-left:auto;padding:12px 28px;font-size:15px;font-weight:600;">Preview</button>
           </div>
         </div>
       </div>
@@ -383,16 +414,16 @@
       <div id="preview-page" class="page" style="display:none;">
         <div class="merge-section" style="height:100%;display:flex;flex-direction:column;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:2px solid var(--accent-green);padding-bottom:10px;flex-shrink:0;">
-            <h3 style="margin:0;">🔍 Preview ข้อมูลก่อนรวม <span id="previewCountBadge" style="font-size:12px;font-weight:400;color:var(--text-secondary);margin-left:8px;"></span></h3>
+            <h3 style="margin:0;">Preview Data <span id="previewCountBadge" style="font-size:12px;font-weight:400;color:var(--text-secondary);margin-left:8px;"></span></h3>
             <div style="display:flex;gap:8px;">
-              <button onclick="hidePreviewPage()" class="btn btn-gray" style="font-size:12px;">⬅️ กลับแก้ Mapping</button>
-              <button id="confirmMergeBtn" onclick="executeFinalMerge(this)" class="btn btn-green" style="font-size:14px;font-weight:600;padding:8px 20px;">🚀 ยืนยันรวมข้อมูล</button>
+              <button onclick="hidePreviewPage()" class="btn btn-gray" style="font-size:12px;">Back to Mapping</button>
+              <button id="confirmMergeBtn" onclick="executeFinalMerge(this)" class="btn btn-green" style="font-size:14px;font-weight:600;padding:8px 20px;">Confirm Merge</button>
             </div>
           </div>
 
           <!-- สรุป skip -->
           <div id="previewSkipBanner" style="display:none;background:#fef3c7;color:#78350f;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:10px;flex-shrink:0;font-weight:500;">
-            ⚠️ <span id="previewSkipMsg"></span>
+            <span id="previewSkipMsg"></span>
           </div>
 
           <!-- ตาราง preview -->
@@ -404,7 +435,7 @@
           </div>
 
           <div style="padding:10px 0 0;font-size:11px;color:var(--text-secondary);flex-shrink:0;">
-            แสดงสูงสุด 50 แถวแรก — แถวที่มีขีดฆ่าจะถูกข้ามและไม่แสดงที่นี่ &nbsp;|&nbsp; เซลล์ว่างแสดงเป็นพื้นหลังสีเหลืองอ่อน
+            Showing first 50 rows — strikethrough rows are excluded &nbsp;|&nbsp; Empty cells highlighted in light yellow
           </div>
         </div>
       </div>
@@ -418,64 +449,64 @@
 
             <!-- LEFT: Upload PDF -->
             <div class="merge-section">
-              <h3>📄 1. อัพโหลด PDF</h3>
+              <h3>1. Upload PDF</h3>
               <input type="file" id="pdfFileInput" accept=".pdf" style="display:none;" onchange="onPdfFileSelected(this)">
 
               <div id="pdfDropZone" class="pdf-drop-zone" onclick="document.getElementById('pdfFileInput').click()">
                 <div>
-                  <div class="drop-icon">📤</div>
-                  <p>ลากไฟล์ PDF มาวางที่นี่<br>หรือ <span style="color:var(--accent);font-weight:600;text-decoration:underline;">คลิกเพื่อเลือกไฟล์</span></p>
-                  <p style="font-size:11px;color:var(--text-secondary);margin-top:6px;">รองรับไฟล์ .pdf ขนาดไม่เกิน 20 MB</p>
+                  <div class="drop-icon" style="font-size:32px;opacity:0.5;font-weight:300;margin-bottom:8px;">&#8593;</div>
+                  <p>Drag & drop a PDF here<br>or <span style="color:var(--accent);font-weight:600;text-decoration:underline;">click to browse</span></p>
+                  <p style="font-size:11px;color:var(--text-secondary);margin-top:6px;">Supports .pdf up to 20 MB</p>
                 </div>
               </div>
 
               <div id="pdfFileInfo" style="display:none;">
                 <div class="pdf-file-badge">
-                  <span style="font-size:24px;">📎</span>
+                  <span style="font-size:18px;opacity:0.6;">PDF</span>
                   <div>
                     <div class="fname" id="pdfFileName"></div>
                     <div class="fsize" id="pdfFileSize"></div>
                   </div>
-                  <button onclick="clearPdfFile()" class="btn btn-red" style="padding:4px 10px;font-size:11px;">✕ ลบ</button>
+                  <button onclick="clearPdfFile()" class="btn btn-red" style="padding:4px 10px;font-size:11px;">Remove</button>
                 </div>
               </div>
 
-              <label class="sidebar-label" style="display:block;margin-top:16px;margin-bottom:6px;">📑 เลือกหน้าที่ต้องการแปลง</label>
-              <input type="text" id="pdfPageRange" class="input-field" value="all" placeholder='เช่น "all" หรือ "15-25, 30-35"'>
+              <label class="sidebar-label" style="display:block;margin-top:16px;margin-bottom:6px;">Page Range</label>
+              <input type="text" id="pdfPageRange" class="input-field" value="all" placeholder='e.g. "all" or "15-25, 30-35"'>
               <p style="font-size:11px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">
-                ใส่ <b>"all"</b> = ทุกหน้า &nbsp;|&nbsp; ระบุช่วง เช่น <b>"15-25"</b> หรือ <b>"5-10, 20-30"</b>
+                <b>"all"</b> = all pages &nbsp;|&nbsp; Specify range e.g. <b>"15-25"</b> or <b>"5-10, 20-30"</b>
               </p>
 
               <button id="pdfExtractBtn" onclick="startPdfExtract(this)" class="btn btn-primary"
                 style="width:100%;margin-top:16px;padding:14px;font-size:15px;font-weight:600;" disabled>
-                🤖 แปลงข้อมูลด้วย AI
+                Extract with AI
               </button>
             </div>
 
             <!-- RIGHT: Output settings -->
             <div class="merge-section">
-              <h3>💾 2. ตั้งค่าผลลัพธ์</h3>
-              <label class="sidebar-label" style="display:block;margin-bottom:6px;">✏️ ชื่อไฟล์ Google Sheet</label>
-              <input type="text" id="pdfOutputName" class="input-field" placeholder="ชื่อไฟล์ที่จะสร้าง..." style="margin-bottom:16px;">
+              <h3>2. Output Settings</h3>
+              <label class="sidebar-label" style="display:block;margin-bottom:6px;">Output File Name</label>
+              <input type="text" id="pdfOutputName" class="input-field" placeholder="File name to create..." style="margin-bottom:16px;">
 
-              <!-- Stats (แสดงหลัง extract) -->
+              <!-- Stats -->
               <div id="pdfStatsArea" style="display:none;padding:14px;background:var(--bg-check);border-radius:10px;border:1px solid var(--border);margin-bottom:16px;">
-                <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--accent);">📊 ผลการแปลง</div>
+                <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--accent);">Extraction Results</div>
                 <div id="pdfStatsContent" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
               </div>
 
               <!-- Save button -->
               <button id="pdfSaveBtn" onclick="savePdfData(this)" class="btn btn-green"
                 style="display:none;width:100%;padding:14px;font-size:15px;font-weight:600;">
-                💾 บันทึกลง Google Sheet
+                Save to Google Sheet
               </button>
 
               <!-- Result banner -->
               <div id="pdfResultBanner" class="merge-result-banner" style="margin-top:12px;">
-                <b style="color:#065f46;font-size:13px;">✅ บันทึกสำเร็จ!</b>
+                <b style="color:#065f46;font-size:13px;">Save Complete</b>
                 <div style="margin-top:6px;font-size:12px;color:#065f46;" id="pdfResultMsg"></div>
                 <a id="pdfResultLink" href="#" target="_blank" style="display:inline-block;margin-top:8px;color:var(--accent);font-weight:600;text-decoration:none;">
-                  🔗 เปิดไฟล์ใน Google Sheets
+                  Open in Google Sheets
                 </a>
               </div>
             </div>
@@ -485,10 +516,10 @@
           <!-- ──── PREVIEW TABLE (editable) ──── -->
           <div id="pdfPreviewArea" class="pdf-preview-box" style="display:none;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-              <h3 style="margin:0;font-size:16px;">🔍 Preview — <span style="font-weight:400;font-size:13px;">คลิกที่เซลล์เพื่อแก้ไข</span></h3>
+              <h3 style="margin:0;font-size:16px;">Preview <span style="font-weight:400;font-size:13px;color:var(--text-secondary);">— click cells to edit</span></h3>
               <div style="display:flex;gap:8px;">
-                <button onclick="addPdfRow()" class="btn btn-primary" style="font-size:12px;padding:6px 14px;">➕ เพิ่มแถว</button>
-                <button onclick="deleteSelectedPdfRows()" class="btn btn-red" style="font-size:12px;padding:6px 14px;">🗑️ ลบแถวที่เลือก</button>
+                <button onclick="addPdfRow()" class="btn btn-primary" style="font-size:12px;padding:6px 14px;">Add Row</button>
+                <button onclick="deleteSelectedPdfRows()" class="btn btn-red" style="font-size:12px;padding:6px 14px;">Delete Selected</button>
               </div>
             </div>
             <div style="overflow:auto;max-height:400px;border:1px solid var(--border);border-radius:10px;">
@@ -498,7 +529,7 @@
               </table>
             </div>
             <p style="font-size:11px;color:var(--text-secondary);margin-top:8px;">
-              คลิกที่เซลล์เพื่อแก้ไขข้อมูลโดยตรง &nbsp;|&nbsp; ติ๊กช่องซ้ายเพื่อเลือกแถวที่ต้องการลบ
+              Click a cell to edit directly &nbsp;|&nbsp; Check the box to select rows for deletion
             </p>
           </div>
 
@@ -577,10 +608,10 @@
 
       function copyAiResponse(btnId, contentId) {
         var c = document.getElementById(contentId); if (!c) return;
-        var t = c.innerText.replace(/^📋 Copy$|^✅ Copied!$/gm, '').trim();
+        var t = c.innerText.replace(/^Copy$|^Copied$/gm, '').trim();
         navigator.clipboard.writeText(t).then(function() {
-          var b = document.getElementById(btnId); b.innerText = '✅ Copied!'; b.classList.add('copied');
-          setTimeout(function() { b.innerText = '📋 Copy'; b.classList.remove('copied'); }, 2000);
+          var b = document.getElementById(btnId); b.innerText = 'Copied'; b.classList.add('copied');
+          setTimeout(function() { b.innerText = 'Copy'; b.classList.remove('copied'); }, 2000);
         });
       }
 
@@ -590,14 +621,14 @@
       function toggleDarkMode() {
         document.body.classList.toggle('dark');
         var d = document.body.classList.contains('dark');
-        document.getElementById('darkToggle').innerText = d ? '☀️' : '🌙';
+        document.getElementById('darkToggle').innerText = d ? 'Light' : 'Dark';
         try { localStorage.setItem('darkMode', d ? '1' : '0'); } catch(e) {}
       }
       try {
         if (localStorage.getItem('darkMode') === '1') {
           document.body.classList.add('dark');
           document.addEventListener('DOMContentLoaded', function() {
-            var t = document.getElementById('darkToggle'); if (t) t.innerText = '☀️';
+            var t = document.getElementById('darkToggle'); if (t) t.innerText = 'Light';
           });
         }
       } catch(e) {}
@@ -700,8 +731,8 @@
             document.getElementById('mergeSearch').value = '';
 
             if (allFiles.length === 0) {
-              area.innerHTML = '<div class="empty-state"><div class="empty-icon">📂</div><p>ยังไม่มีไฟล์<br>กด Sync เพื่อดึงข้อมูลจาก Drive</p><div class="arrow-hint">↑ กด Sync ด้านบน</div></div>';
-              mul.innerHTML  = '<div class="empty-state"><div class="empty-icon">📂</div><p>ยังไม่มีไฟล์<br>กด Sync ด้านบนเพื่อดึงข้อมูล</p></div>';
+              area.innerHTML = '<div class="empty-state"><div class="empty-icon">--</div><p>No files yet<br>Click Sync to fetch from Drive</p><div class="arrow-hint">Sync above</div></div>';
+              mul.innerHTML  = '<div class="empty-state"><div class="empty-icon">--</div><p>No files yet<br>Click Sync above to fetch data</p></div>';
               return;
             }
 
@@ -781,7 +812,7 @@
             results.forEach(function(fi) {
               var title = document.createElement('div');
               title.className = 'file-group-title';
-              title.textContent = '📄 ' + fi.fileName;
+              title.textContent = fi.fileName;
               area.appendChild(title);
               if (fi.sheets.length === 0) {
                 var noSheet = document.createElement('div');
@@ -827,7 +858,7 @@
         var total = 0;
         cbs.forEach(function(cb) { total += parseInt(cb.getAttribute('data-rows') || '0'); });
         var capped = Math.min(total, 1500 * cbs.length);
-        bar.textContent = '📊 ' + cbs.length + ' sheet(s) — ประมาณ ' + Math.min(total, 1500) + ' แถวที่จะส่ง AI (สูงสุด 1,500 ต่อ sheet)';
+        bar.textContent = cbs.length + ' sheet(s) — approx. ' + Math.min(total, 1500) + ' rows to send (max 1,500 per sheet)';
         bar.classList.add('visible');
       }
 
@@ -871,7 +902,7 @@
             onMergeFileToggle(cb);
           }
         });
-        btn.textContent = newState ? '☐ ยกเลิกทั้งหมด' : '☑ เลือกทั้งหมด';
+        btn.textContent = newState ? 'Deselect All' : 'Select All';
       }
 
       function onMergeFileToggle(cb) {
@@ -916,7 +947,7 @@
         var fileCbs = document.querySelectorAll('input[name="f_check"]:checked');
         if (fileCbs.length === 0) { sum.style.display = 'none'; return; }
 
-        var text = '🚀 พร้อมรวม <b>' + fileCbs.length + ' ไฟล์</b><br>';
+        var text = 'Ready to merge <b>' + fileCbs.length + ' file(s)</b><br>';
         var totalSheets = 0, totalRows = 0;
 
         fileCbs.forEach(function(c) {
@@ -945,7 +976,7 @@
          ========================================== */
       function syncFiles(btn) {
         btn.disabled = true;
-        toggleLoading(true, "🔄 กำลัง Sync...");
+        toggleLoading(true, "Syncing files...");
         google.script.run
           .withSuccessHandler(function(m) { toggleLoading(false); alert(m); btn.disabled = false; loadMenus(); })
           .withFailureHandler(function(e) { toggleLoading(false); btn.disabled = false; if (!handleError(e)) alert('Sync ล้มเหลว: ' + e.message); })
@@ -963,13 +994,13 @@
         toggleLoading(true, "กำลังสร้างโฟลเดอร์..."); closeFolderModal();
         google.script.run
           .withSuccessHandler(function(r) {
-            toggleLoading(false); alert("✅ สร้างสำเร็จ: " + r.name); loadFolders();
+            toggleLoading(false); alert("Created: " + r.name); loadFolders();
             setTimeout(function() {
               var s = document.getElementById('folderSelect');
               for (var i = 0; i < s.options.length; i++) { if (s.options[i].value === r.id) { s.selectedIndex = i; break; } }
             }, 1000);
           })
-          .withFailureHandler(function(e) { toggleLoading(false); if (!handleError(e)) alert("❌ ล้มเหลว: " + e.message); })
+          .withFailureHandler(function(e) { toggleLoading(false); if (!handleError(e)) alert("Failed: " + e.message); })
           .createNewFolder(SESSION_TOKEN, name);
       }
 
@@ -1007,7 +1038,7 @@
         var tid = "ai-" + Date.now();
         var contentId = "content-" + tid;
         var copyBtnId = "copy-" + tid;
-        chat.innerHTML += '<div id="' + tid + '" class="msg-row ai-msg"><div class="ai-content" id="' + contentId + '">🤖 กำลังประมวลผล...</div><div class="msg-time" id="time-' + tid + '"></div></div>';
+        chat.innerHTML += '<div id="' + tid + '" class="msg-row ai-msg"><div class="ai-content" id="' + contentId + '">Processing...</div><div class="msg-time" id="time-' + tid + '"></div></div>';
         chat.scrollTop = chat.scrollHeight;
         inputFld.value = ''; askBtn.disabled = true; inputFld.disabled = true;
 
@@ -1023,30 +1054,30 @@
                 sec--; var cd = document.getElementById('cd-' + tid); if (cd) cd.innerText = sec;
                 if (sec <= 0) {
                   clearInterval(timer);
-                  document.getElementById(contentId).innerHTML = '🔄 กำลังลองใหม่...';
+                  document.getElementById(contentId).innerHTML = 'Retrying...';
                   google.script.run
                     .withSuccessHandler(function(r2) {
                       document.getElementById('time-' + tid).innerText = getTimeStr();
                       if (r2 === "RATE_LIMITED") {
                         document.getElementById(contentId).innerHTML = '<span style="color:var(--accent-orange);">⏳ ยังติด Rate Limit กรุณารอแล้วกดส่งใหม่</span>';
                       } else {
-                        document.getElementById(contentId).innerHTML = '<button class="copy-btn" id="' + copyBtnId + '" onclick="copyAiResponse(\'' + copyBtnId + '\',\'' + contentId + '\')">📋 Copy</button><b>🤖 AI:</b><br>' + sanitizeHtml(r2);
+                        document.getElementById(contentId).innerHTML = '<button class="copy-btn" id="' + copyBtnId + '" onclick="copyAiResponse(\'' + copyBtnId + '\',\'' + contentId + '\')">Copy</button><b>AI:</b><br>' + sanitizeHtml(r2);
                         playNotificationSound();
                       }
                       chat.scrollTop = chat.scrollHeight; askBtn.disabled = false; inputFld.disabled = false; inputFld.focus();
                     })
-                    .withFailureHandler(function(e) { document.getElementById(contentId).innerHTML = '<span style="color:var(--accent-red);">❌ ลองใหม่ไม่สำเร็จ</span>'; askBtn.disabled = false; inputFld.disabled = false; handleError(e); })
+                    .withFailureHandler(function(e) { document.getElementById(contentId).innerHTML = '<span style="color:var(--accent-red);">Retry failed</span>'; askBtn.disabled = false; inputFld.disabled = false; handleError(e); })
                     .askAI(SESSION_TOKEN, lastAIQuestion, lastAIFileConfigs);
                 }
               }, 1000);
             } else {
-              document.getElementById(contentId).innerHTML = '<button class="copy-btn" id="' + copyBtnId + '" onclick="copyAiResponse(\'' + copyBtnId + '\',\'' + contentId + '\')">📋 Copy</button><b>🤖 AI:</b><br>' + sanitizeHtml(res);
+              document.getElementById(contentId).innerHTML = '<button class="copy-btn" id="' + copyBtnId + '" onclick="copyAiResponse(\'' + copyBtnId + '\',\'' + contentId + '\')">Copy</button><b>AI:</b><br>' + sanitizeHtml(res);
               chat.scrollTop = chat.scrollHeight; askBtn.disabled = false; inputFld.disabled = false; inputFld.focus();
               playNotificationSound();
             }
           })
           .withFailureHandler(function(err) {
-            document.getElementById(contentId).innerHTML = '<span style="color:var(--accent-red);">❌ ' + escapeHtml(err.message) + '</span>';
+            document.getElementById(contentId).innerHTML = '<span style="color:var(--accent-red);">' + escapeHtml(err.message) + '</span>';
             document.getElementById('time-' + tid).innerText = getTimeStr();
             chat.scrollTop = chat.scrollHeight; askBtn.disabled = false; inputFld.disabled = false;
             handleError(err);
@@ -1088,7 +1119,7 @@
         document.getElementById('mergeResultBanner').classList.remove('visible');
 
         btn.disabled = true;
-        toggleLoading(true, "🔍 กำลังสแกนหัวตารางจากไฟล์ต้นฉบับ...");
+        toggleLoading(true, "Scanning headers from source files...");
 
         // เรียก getDiscoveryHeaders — ได้ {fileId,fileName,sheetName,headerRow,headers[]}
         // แต่เราต้องการ missingTemplateKeys ด้วย → เรียก getSheetMeta เพิ่ม
@@ -1134,7 +1165,7 @@
               var label = cfg.fileName + ' / ' + cfg.sheetName;
               var line  = document.createElement('div');
               if (result.detected) {
-                line.innerHTML = '✅ <b>' + escapeHtml(label) + '</b> → แถว <b>' + result.row + '</b>';
+                line.innerHTML = '<b>' + escapeHtml(label) + '</b> — row <b>' + result.row + '</b>';
                 // อัพเดต header row input ใน merge config panel
                 var panel = document.getElementById('conf-' + cfg.fileId);
                 if (panel) {
@@ -1148,7 +1179,7 @@
                   });
                 }
               } else {
-                line.innerHTML = '⚠️ <b>' + escapeHtml(label) + '</b> — ' + escapeHtml(result.reason || 'ตรวจไม่ได้');
+                line.innerHTML = '<b>' + escapeHtml(label) + '</b> — ' + escapeHtml(result.reason || 'Could not detect');
                 line.style.color = 'var(--accent-orange)';
               }
               resultsEl.appendChild(line);
@@ -1156,7 +1187,7 @@
             })
             .withFailureHandler(function(e) {
               var line = document.createElement('div');
-              line.textContent = '❌ ' + cfg.fileName + ': ' + e.message;
+              line.textContent = cfg.fileName + ': ' + e.message;
               line.style.color = 'var(--accent-red)';
               resultsEl.appendChild(line);
               pending--;
@@ -1230,7 +1261,7 @@
         });
 
         msg.style.color = 'var(--accent-green)';
-        msg.textContent = '✅ ใช้ Profile แล้ว — จับคู่ได้ ' + applied + ' คอลัมน์';
+        msg.textContent = 'Profile applied — ' + applied + ' columns mapped';
       }
 
       function saveProfile(btn) {
@@ -1254,14 +1285,14 @@
           .withSuccessHandler(function(r) {
             btn.disabled = false;
             msg.style.color = 'var(--accent-green)';
-            msg.textContent = '💾 บันทึกแล้ว! (ทั้งหมด ' + r.count + ' profiles)';
+            msg.textContent = 'Saved (' + r.count + ' profiles total)';
             document.getElementById('profileNameInput').value = '';
             loadProfiles();
           })
           .withFailureHandler(function(e) {
             btn.disabled = false;
             msg.style.color = 'var(--accent-red)';
-            msg.textContent = '❌ บันทึกล้มเหลว: ' + e.message;
+            msg.textContent = 'Save failed: ' + e.message;
           })
           .saveMappingProfile(SESSION_TOKEN, name, mapping);
       }
@@ -1279,7 +1310,7 @@
             msg.textContent = 'ลบ "' + name + '" แล้ว';
             loadProfiles();
           })
-          .withFailureHandler(function(e) { msg.style.color = 'var(--accent-red)'; msg.textContent = '❌ ' + e.message; })
+          .withFailureHandler(function(e) { msg.style.color = 'var(--accent-red)'; msg.textContent = e.message; })
           .deleteMappingProfile(SESSION_TOKEN, name);
       }
 
@@ -1343,7 +1374,7 @@
           if (autoDateLock.indexOf(th) !== -1) {
             var locked = document.createElement('div');
             locked.className = 'map-locked';
-            locked.textContent = '🔒 ใส่วันที่ปัจจุบันอัตโนมัติ';
+            locked.textContent = 'Auto-filled with current date';
             row.appendChild(label);
             row.appendChild(locked);
           } else {
@@ -1618,7 +1649,7 @@
 
         var search = document.createElement('input');
         search.className = 'chip-search';
-        search.placeholder = '🔍 ค้นหาหัวคอลัมน์...';
+        search.placeholder = 'Search columns...';
         search.setAttribute('autocomplete', 'off');
 
         var optList = document.createElement('div');
@@ -1723,7 +1754,7 @@
          ========================================== */
       function openPreview(btn) {
         btn.disabled = true;
-        toggleLoading(true, "🔍 กำลังโหลด Preview...");
+        toggleLoading(true, "Loading preview...");
 
         google.script.run
           .withSuccessHandler(function(data) {
@@ -1750,11 +1781,11 @@
 
         // skip/stats banner
         var parts = [];
-        if (data.totalSource)  parts.push('📋 ต้นฉบับ: ' + data.totalSource + ' แถว');
-        if (data.skipped > 0)  parts.push('✂️ ขีดฆ่า: -' + data.skipped + ' แถว');
-        if (data.noBrand > 0)  parts.push('🚫 ไม่มีแบรนด์/รุ่น: -' + data.noBrand + ' แถว');
+        if (data.totalSource)  parts.push('Source: ' + data.totalSource + ' rows');
+        if (data.skipped > 0)  parts.push('Strikethrough: -' + data.skipped + ' rows');
+        if (data.noBrand > 0)  parts.push('No brand/model: -' + data.noBrand + ' rows');
         if (data.emptyRows > 0) parts.push('⬜ แถวว่าง: -' + data.emptyRows + ' แถว');
-        if (parts.length > 0)  parts.push('✅ คงเหลือ: ' + data.total + ' แถว');
+        if (parts.length > 0)  parts.push('Remaining: ' + data.total + ' rows');
 
         if (data.skipped > 0 || data.emptyRows > 0 || data.noBrand > 0) {
           skipMsg.innerHTML = parts.join(' &nbsp;|&nbsp; ');
@@ -1808,7 +1839,7 @@
          ========================================== */
       function executeFinalMerge(btn) {
         btn.disabled = true;
-        toggleLoading(true, "🚀 กำลังรวมข้อมูล...");
+        toggleLoading(true, "Merging data...");
 
         google.script.run
           .withSuccessHandler(function(m) {
@@ -1826,21 +1857,21 @@
               var linkEl = document.getElementById('mergeResultLink');
 
               // สร้าง message พร้อม stats
-              var mainMsg = '✅ รวมสำเร็จ: ' + result.rows + ' แถว  |  ไฟล์: ' + result.fileName;
+              var mainMsg = 'Merged: ' + result.rows + ' rows  |  File: ' + result.fileName;
               if (result.totalSource) {
-                mainMsg += '\n📊 ต้นฉบับ ' + result.totalSource + ' แถว';
+                mainMsg += '\nSource: ' + result.totalSource + ' rows';
                 if (result.strikeRows > 0)  mainMsg += ' → ขีดฆ่า -' + result.strikeRows;
                 if (result.noBrandRows > 0) mainMsg += ' → ไม่มีแบรนด์/รุ่น -' + result.noBrandRows;
                 if (result.emptyRows > 0)  mainMsg += ' → แถวว่าง -' + result.emptyRows;
                 mainMsg += ' → คงเหลือ ' + result.rows + ' แถว';
               }
               if (result.errorFiles && result.errorFiles.length > 0) {
-                mainMsg += '\n⚠️ ข้ามไฟล์ที่มีปัญหา ' + result.errorFiles.length + ' ไฟล์:';
+                mainMsg += '\nSkipped ' + result.errorFiles.length + ' file(s) with errors:';
                 result.errorFiles.forEach(function(ef) { mainMsg += '\n   - ' + ef.name + ' (' + ef.reason + ')'; });
               }
               msgEl.textContent  = mainMsg;
               linkEl.href        = result.url;
-              linkEl.textContent = '🔗 เปิด "' + result.fileName + '" ใน Google Sheets';
+              linkEl.textContent = 'Open "' + result.fileName + '" in Google Sheets';
               banner.classList.add('visible');
               loadMenus();
             } else {
@@ -2005,7 +2036,7 @@
         var pageRange = document.getElementById('pdfPageRange').value.trim() || 'all';
 
         btn.disabled = true;
-        toggleLoading(true, '📄 กำลังอ่าน PDF ด้วย pdf.js...');
+        toggleLoading(true, 'Reading PDF...');
 
         var reader = new FileReader();
         reader.onload = function(e) {
@@ -2025,22 +2056,22 @@
               return;
             }
 
-            toggleLoading(true, '🖼️ กำลังแปลง PDF เป็นรูปภาพ... (0/' + pageNums.length + ')');
+            toggleLoading(true, 'Converting PDF to images... (0/' + pageNums.length + ')');
 
             renderPdfPagesToImages(pdfState.file, pageNums, function(current, total, pageNum) {
-              toggleLoading(true, '🖼️ กำลังแปลงหน้า ' + pageNum + ' เป็นรูปภาพ... (' + current + '/' + total + ')');
+              toggleLoading(true, 'Converting page ' + pageNum + '... (' + current + '/' + total + ')');
             }).then(function(images) {
-              toggleLoading(true, '🤖 OCR.space กำลังอ่านข้อความ + Gemini สกัดข้อมูล...\n' +
+              toggleLoading(true, 'OCR + AI extracting data...\n' +
                 images.length + ' หน้า | อาจใช้เวลา 15-60 วินาที');
 
               google.script.run
                 .withSuccessHandler(function(result) {
                   toggleLoading(false); btn.disabled = false;
-                  if (result.error) { alert('❌ ' + result.error); return; }
+                  if (result.error) { alert(result.error); return; }
                   pdfState.extractedRows = result.rows || [];
                   renderPdfPreview(pdfState.extractedRows);
                   renderPdfStats(pdfState.extractedRows);
-                  var info = '✅ สกัดได้ ' + result.total + ' รายการ | วิธี: ' + (result.method || 'OCR+Gemini') +
+                  var info = 'Extracted ' + result.total + ' items | Method: ' + (result.method || 'OCR+Gemini') +
                              ' | Model: ' + (result.model || '-') + ' | OCR ' + images.length + ' หน้า';
                   document.getElementById('pdfStats').insertAdjacentHTML('afterbegin',
                     '<div style="background:#065f46;color:#6ee7b7;padding:8px 12px;border-radius:8px;margin-bottom:10px;font-size:13px">' + info + '</div>');
@@ -2131,8 +2162,8 @@
         rows.forEach(function(r) { if (r.page) pages[r.page] = true; });
 
         cont.innerHTML =
-          '<div class="pdf-stat" style="background:#eff6ff;color:#1d4ed8;">📝 <b>' + rows.length + '</b> แถว</div>' +
-          '<div class="pdf-stat" style="background:#ecfdf5;color:#065f46;">📄 <b>' + Object.keys(pages).length + '</b> หน้า</div>';
+          '<div class="pdf-stat" style="background:#eff6ff;color:#1d4ed8;"><b>' + rows.length + '</b> rows</div>' +
+          '<div class="pdf-stat" style="background:#ecfdf5;color:#065f46;"><b>' + Object.keys(pages).length + '</b> pages</div>';
 
         area.style.display = 'block';
         document.getElementById('pdfSaveBtn').style.display = rows.length > 0 ? 'block' : 'none';
@@ -2178,15 +2209,15 @@
         });
 
         btn.disabled = true;
-        toggleLoading(true, '💾 กำลังบันทึกลง Google Sheet...');
+        toggleLoading(true, 'Saving to Google Sheet...');
 
         google.script.run
           .withSuccessHandler(function(r) {
             toggleLoading(false); btn.disabled = false;
-            if (r.error) { alert('❌ ' + r.error); return; }
+            if (r.error) { alert(r.error); return; }
             document.getElementById('pdfResultMsg').textContent = r.message;
             document.getElementById('pdfResultLink').href = r.url;
-            document.getElementById('pdfResultLink').textContent = '🔗 เปิด "' + r.fileName + '" ใน Google Sheets';
+            document.getElementById('pdfResultLink').textContent = 'Open "' + r.fileName + '" in Google Sheets';
             document.getElementById('pdfResultBanner').classList.add('visible');
             playNotificationSound();
           })
@@ -2196,6 +2227,122 @@
           })
           .savePdfExtractedData(SESSION_TOKEN, JSON.stringify(pdfState.extractedRows), name);
       }
+
+      /* ===== SCROLL VELOCITY LOGIN ===== */
+      (function() {
+        var BANDS = [
+          { text: 'AI CHAT PROMOTION  ✦   ', dir:  1, speed: 60, cls: 'sv-blue' },
+          { text: 'SYNC FILES  ✦  MERGE DATA  ✦   ', dir: -1, speed: 50, cls: 'sv-gold' },
+          { text: 'AI CHAT PROMOTION  ✦     ', dir:  1, speed: 65, cls: 'sv-blue' },
+          { text: 'SYNC FILES  ✦  MERGE DATA  ✦   ', dir: -1, speed: 55, cls: 'sv-gold' },
+          { text: 'AI CHAT PROMOTION  ✦   ', dir:  1, speed: 58, cls: 'sv-blue' },
+          { text: 'SYNC FILES  ✦  MERGE DATA  ✦   ', dir: -1, speed: 52, cls: 'sv-gold' },
+        ];
+        var COPIES = 10;
+        var wrapper = document.getElementById('svWrapper');
+        if (!wrapper) return;
+
+        var tracks = BANDS.map(function(b) {
+          var band  = document.createElement('div');
+          band.className = 'sv-band';
+          var track = document.createElement('div');
+          track.className = 'sv-track ' + b.cls;
+          for (var i = 0; i < COPIES; i++) {
+            var s = document.createElement('span');
+            s.textContent = b.text;
+            track.appendChild(s);
+          }
+          band.appendChild(track);
+          wrapper.appendChild(band);
+          return { el: track, dir: b.dir, speed: b.speed, x: 0, spanW: 0 };
+        });
+
+        var lastTs = null;
+        function animate(ts) {
+          if (!lastTs) lastTs = ts;
+          var delta = Math.min((ts - lastTs) / 1000, 0.05);
+          lastTs = ts;
+          tracks.forEach(function(t) {
+            if (!t.spanW) {
+              var s = t.el.querySelector('span');
+              if (s) t.spanW = s.offsetWidth;
+            }
+            if (!t.spanW) return;
+            t.x += t.speed * delta;
+            var offset = t.x % t.spanW;
+            var tx = t.dir > 0 ? -offset : -(t.spanW - offset);
+            t.el.style.transform = 'translateX(' + tx + 'px)';
+          });
+          requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
+      })();
+
+      /* ===== TRUE FOCUS (Login title) ===== */
+      (function() {
+        var WORDS        = ['ALL', 'in', 'APP'];
+        var BLUR         = 5;
+        var COLOR        = '#6366f1';
+        var GLOW         = 'rgba(99,102,241,0.7)';
+        var ANIM_DUR     = 0.45;
+        var PAUSE        = 1.1;
+
+        var container = document.getElementById('trueFocus');
+        if (!container) return;
+
+        /* Build word spans */
+        var wordEls = WORDS.map(function(w) {
+          var s = document.createElement('span');
+          s.className = 'focus-word';
+          s.textContent = w;
+          s.style.filter = 'blur(' + BLUR + 'px)';
+          container.appendChild(s);
+          return s;
+        });
+
+        /* Build corner-frame */
+        var frame = document.createElement('div');
+        frame.className = 'focus-frame';
+        frame.style.setProperty('--tf-color', COLOR);
+        frame.style.setProperty('--tf-glow',  GLOW);
+        frame.innerHTML =
+          '<span class="tf-corner tf-tl"></span>' +
+          '<span class="tf-corner tf-tr"></span>' +
+          '<span class="tf-corner tf-bl"></span>' +
+          '<span class="tf-corner tf-br"></span>';
+        container.appendChild(frame);
+
+        var current = 0;
+
+        function moveTo(idx) {
+          wordEls.forEach(function(el, i) {
+            el.style.filter = i === idx ? 'blur(0px)' : 'blur(' + BLUR + 'px)';
+            el.style.transition = 'filter ' + ANIM_DUR + 's ease';
+          });
+          var pr = container.getBoundingClientRect();
+          var ar = wordEls[idx].getBoundingClientRect();
+          frame.style.left   = (ar.left - pr.left) + 'px';
+          frame.style.top    = (ar.top  - pr.top)  + 'px';
+          frame.style.width  = ar.width  + 'px';
+          frame.style.height = ar.height + 'px';
+          frame.style.opacity = '1';
+        }
+
+        /* First paint: no transition so frame snaps to position */
+        frame.style.transition = 'none';
+        moveTo(0);
+        setTimeout(function() {
+          frame.style.transition =
+            'left ' + ANIM_DUR + 's ease, top ' + ANIM_DUR + 's ease, ' +
+            'width ' + ANIM_DUR + 's ease, height ' + ANIM_DUR + 's ease, ' +
+            'opacity .3s ease';
+        }, 60);
+
+        setInterval(function() {
+          current = (current + 1) % WORDS.length;
+          moveTo(current);
+        }, (ANIM_DUR + PAUSE) * 1000);
+      })();
     </script>
   </body>
 </html>
