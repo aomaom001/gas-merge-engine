@@ -1070,13 +1070,17 @@ function ocrPdfPages_(base64Data, ocrKey) {
 }
 
 /* ── Gemini: text → structured JSON ── */
-function geminiTextToPromo_(apiKey, ocrText, pageRange) {
+function typhoonTextToPromo_(apiKey, ocrText, pageRange) {
   var pageInst = (!pageRange || pageRange === "all")
     ? "ทุกหน้า"
     : "เฉพาะหน้า " + pageRange + " เท่านั้น (ข้ามหน้าอื่น)";
 
-  var prompt =
-    'คุณคือ AI ที่เชี่ยวชาญการสกัดข้อมูลโปรโมชั่นจากเอกสาร PDF ของ True/dtac\n\n' +
+  var systemMsg =
+    'คุณคือ AI ที่เชี่ยวชาญการสกัดข้อมูลโปรโมชั่นจากเอกสาร PDF ของ True/dtac\n' +
+    'คุณจะได้รับข้อความที่ OCR มาจาก PDF แล้วต้องสกัดข้อมูลโปรโมชั่นเป็น JSON array\n' +
+    'ตอบเป็น JSON array เท่านั้น ห้ามมี markdown, ห้ามมีข้อความอื่นนอก JSON';
+
+  var userMsg =
     'ข้อความด้านล่างนี้ถูก OCR มาจาก PDF (' + pageInst + ')\n' +
     'สกัดข้อมูลโปรโมชั่น/แพ็กเกจทั้งหมดที่พบในตาราง\n' +
     'คืนผลเป็น JSON array โดยแต่ละ object มี key ดังนี้:\n\n' +
@@ -1104,138 +1108,50 @@ function geminiTextToPromo_(apiKey, ocrText, pageRange) {
     '- ตอบเป็น JSON array เท่านั้น ห้ามมี markdown, ห้ามมีข้อความอื่นนอก JSON\n\n' +
     '=== OCR TEXT ===\n' + ocrText;
 
-  // ลอง model ทีละตัว
-  var models = [
-    { name: "gemini-2.0-flash",      ver: "v1beta" },
-    { name: "gemini-2.0-flash-lite", ver: "v1beta" },
-    { name: "gemini-1.5-flash",      ver: "v1" }
-  ];
-
-  var lastError = "";
-  for (var m = 0; m < models.length; m++) {
-    var mdl = models[m];
-    var apiUrl = "https://generativelanguage.googleapis.com/" + mdl.ver +
-                 "/models/" + mdl.name + ":generateContent?key=" + apiKey;
-
-    var genConfig = { temperature: 0.1, maxOutputTokens: 8192 };
-    if (mdl.ver === "v1beta") genConfig.responseMimeType = "application/json";
-
-    var payload = {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: genConfig
-    };
-
-    for (var attempt = 1; attempt <= 2; attempt++) {
-      try {
-        var res = UrlFetchApp.fetch(apiUrl, {
-          method: "post", contentType: "application/json",
-          payload: JSON.stringify(payload),
-          muteHttpExceptions: true
-        });
-        var code = res.getResponseCode();
-        var json = JSON.parse(res.getContentText());
-
-        if (code === 200) {
-          var text = json.candidates[0].content.parts[0].text;
-          text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-          var rows = JSON.parse(text);
-          if (!Array.isArray(rows)) rows = [rows];
-          return { rows: rows, total: rows.length, model: mdl.name, method: "OCR+Gemini" };
-        }
-        if (code === 429 || code === 404) {
-          lastError = "HTTP " + code + " สำหรับ " + mdl.name;
-          if (code === 429 && attempt < 2) { Utilities.sleep(5000); continue; }
-          break;
-        }
-        return { error: "Gemini error (HTTP " + code + ") [" + mdl.name + "]: " +
-                 (json.error ? json.error.message : "ไม่ทราบสาเหตุ") };
-      } catch(e) {
-        lastError = e.message;
-        if (attempt < 2) { Utilities.sleep(3000); continue; }
-        break;
-      }
-    }
-  }
-  return { error: "Gemini ล้มเหลวทุก model: " + lastError };
-}
-
-/* ── Fallback: ส่ง PDF ตรงไป Gemini (ใช้ token เยอะ) ── */
-function geminiFallbackPdf_(apiKey, base64Data, pageRange) {
-  var pageInst = (!pageRange || pageRange === "all")
-    ? "ทุกหน้า"
-    : "เฉพาะหน้า " + pageRange + " เท่านั้น (ข้ามหน้าอื่น)";
-
-  var prompt =
-    'คุณคือ AI ที่เชี่ยวชาญการสกัดข้อมูลโปรโมชั่นจากเอกสาร PDF ของ True/dtac\n\n' +
-    'อ่าน PDF นี้ (' + pageInst + ') แล้วสกัดข้อมูลโปรโมชั่น/แพ็กเกจทั้งหมดที่พบในตาราง\n' +
-    'คืนผลเป็น JSON array โดยแต่ละ object มี key ดังนี้:\n\n' +
-    '- "type","customer","brand","promo","detail","normalPrice","discount",' +
-    '"extraDiscount","netPrice","mnpDiscount","advancePayment","campaign",' +
-    '"contract","startDate","endDate","page"\n\n' +
-    'กฎ: ถ้าไม่มีข้อมูลใส่ "" | แต่ละ object = 1 โปรโมชั่น | ข้ามหน้าที่ไม่มีตาราง | ตอบ JSON array เท่านั้น';
-
-  var mdl = { name: "gemini-2.0-flash", ver: "v1beta" };
-  var apiUrl = "https://generativelanguage.googleapis.com/" + mdl.ver +
-               "/models/" + mdl.name + ":generateContent?key=" + apiKey;
-
+  var apiUrl = "https://api.opentyphoon.ai/v1/chat/completions";
   var payload = {
-    contents: [{ parts: [
-      { text: prompt },
-      { inline_data: { mime_type: "application/pdf", data: base64Data } }
-    ]}],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: "application/json" }
+    model: "typhoon-v2.1-12b-instruct",
+    messages: [
+      { role: "system", content: systemMsg },
+      { role: "user",   content: userMsg }
+    ],
+    temperature: 0.1,
+    max_tokens: 8192
   };
 
-  try {
-    var res = UrlFetchApp.fetch(apiUrl, {
-      method: "post", contentType: "application/json",
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
-    var code = res.getResponseCode();
-    var json = JSON.parse(res.getContentText());
-    if (code === 200) {
-      var text = json.candidates[0].content.parts[0].text;
-      text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-      var rows = JSON.parse(text);
-      if (!Array.isArray(rows)) rows = [rows];
-      return { rows: rows, total: rows.length, model: mdl.name, method: "DirectPDF" };
-    }
-    return { error: "Fallback Gemini error (HTTP " + code + "): " + (json.error ? json.error.message : "") };
-  } catch(e) {
-    return { error: "Fallback error: " + e.message };
-  }
-}
+  for (var attempt = 1; attempt <= 2; attempt++) {
+    try {
+      var res = UrlFetchApp.fetch(apiUrl, {
+        method: "post",
+        contentType: "application/json",
+        headers: { "Authorization": "Bearer " + apiKey },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      });
+      var code = res.getResponseCode();
+      var body = res.getContentText();
 
-/**
- * extractPdfPromoData  (Main entry)
- * Strategy: OCR.space → text → Gemini  |  Fallback: PDF ตรงไป Gemini
- */
-function extractPdfPromoData(token, base64Data, pageRange) {
-  requireAuth_(token);
-  var props  = PropertiesService.getScriptProperties();
-  var apiKey = props.getProperty('GEMINI_API_KEY');
-  if (!apiKey || !apiKey.trim()) return { error: "ไม่พบ GEMINI_API_KEY กรุณาตั้งค่าใน Script Properties" };
-
-  var ocrKey = props.getProperty('OCR_API_KEY') || 'helloworld';   // free demo key
-
-  // ── Step 1: OCR.space ──
-  try {
-    var ocr = ocrPdfPages_(base64Data, ocrKey);
-    if (!ocr.error && ocr.text && ocr.text.length > 50) {
-      // ── Step 2: Gemini text-only ──
-      var result = geminiTextToPromo_(apiKey, ocr.text, pageRange);
-      if (!result.error) {
-        result.ocrPages = ocr.pages;
-        return result;
+      if (code === 200) {
+        var json = JSON.parse(body);
+        var text = json.choices[0].message.content;
+        text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+        var rows = JSON.parse(text);
+        if (!Array.isArray(rows)) rows = [rows];
+        return { rows: rows, total: rows.length, model: "typhoon-v2.1-12b-instruct", method: "OCR+Typhoon" };
       }
-      // Gemini ล้มเหลว → ลอง fallback
+      if (code === 429 && attempt < 2) { Utilities.sleep(5000); continue; }
+      var errJson = {};
+      try { errJson = JSON.parse(body); } catch(pe) {}
+      return { error: "Typhoon API error (HTTP " + code + "): " +
+               (errJson.error ? (errJson.error.message || JSON.stringify(errJson.error)) : body.substring(0, 300)) };
+    } catch(e) {
+      if (attempt < 2) { Utilities.sleep(3000); continue; }
+      return { error: "Typhoon API error: " + e.message };
     }
-  } catch(e) { /* OCR failed, continue to fallback */ }
-
-  // ── Fallback: ส่ง PDF ตรงไป Gemini ──
-  return geminiFallbackPdf_(apiKey, base64Data, pageRange);
+  }
+  return { error: "Typhoon API ล้มเหลว" };
 }
+
 
 /**
  * extractPdfPageImages  (New — receives page images from client pdf.js)
@@ -1244,8 +1160,8 @@ function extractPdfPromoData(token, base64Data, pageRange) {
 function extractPdfPageImages(token, images, pageRange) {
   requireAuth_(token);
   var props  = PropertiesService.getScriptProperties();
-  var apiKey = props.getProperty('GEMINI_API_KEY');
-  if (!apiKey || !apiKey.trim()) return { error: "ไม่พบ GEMINI_API_KEY กรุณาตั้งค่าใน Script Properties" };
+  var apiKey = props.getProperty('TYPHOON_API_KEY');
+  if (!apiKey || !apiKey.trim()) return { error: "ไม่พบ TYPHOON_API_KEY กรุณาตั้งค่าใน Script Properties" };
 
   var ocrKey = props.getProperty('OCR_API_KEY') || 'helloworld';
 
@@ -1275,13 +1191,13 @@ function extractPdfPageImages(token, images, pageRange) {
     return { error: "OCR ไม่สามารถอ่านข้อความจากรูปภาพได้\n" + ocrErrors.join("\n") };
   }
 
-  // ส่ง OCR text ไป Gemini เพื่อแปลงเป็น structured JSON
-  var result = geminiTextToPromo_(apiKey, allText.trim(), pageRange);
+  // ส่ง OCR text ไป Typhoon เพื่อแปลงเป็น structured JSON
+  var result = typhoonTextToPromo_(apiKey, allText.trim(), pageRange);
   if (result.error) return result;
 
   result.ocrPages  = images.length;
   result.ocrErrors = ocrErrors;
-  result.method    = "OCR+Gemini (Images)";
+  result.method    = "OCR+Typhoon (Images)";
   return result;
 }
 
@@ -1335,4 +1251,50 @@ function savePdfExtractedData(token, rowsJson, newFileName) {
       rows:     dataRows.length
     };
   } catch(e) { return { error: "บันทึกล้มเหลว: " + e.message }; }
+}
+
+/**
+ * saveTyphoonApiDoc_  — สร้าง Google Doc เก็บข้อมูล API config ไว้ใน PDF output folder
+ */
+function saveTyphoonApiDoc_() {
+  var doc = DocumentApp.create("Typhoon API Config");
+  var body = doc.getBody();
+
+  body.appendParagraph("Typhoon API Configuration").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  body.appendParagraph("อัปเดตล่าสุด: " + new Date().toLocaleString("th-TH"));
+  body.appendParagraph("");
+
+  body.appendParagraph("API Endpoint").setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph("URL: https://api.opentyphoon.ai/v1/chat/completions");
+  body.appendParagraph("Method: POST");
+  body.appendParagraph("Auth: Bearer token (ใน header Authorization)");
+  body.appendParagraph("");
+
+  body.appendParagraph("Model ที่ใช้").setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph("typhoon-v2.1-12b-instruct (56K context, Thai optimized)");
+  body.appendParagraph("temperature: 0.1 | max_tokens: 8192");
+  body.appendParagraph("");
+
+  body.appendParagraph("API Key Location").setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph("เก็บไว้ใน Script Properties ชื่อ: TYPHOON_API_KEY");
+  body.appendParagraph("ห้าม hardcode ใน source code!");
+  body.appendParagraph("");
+
+  body.appendParagraph("Rate Limits (Free Tier)").setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph("5 requests/sec | 200 requests/min");
+  body.appendParagraph("");
+
+  body.appendParagraph("Flow การทำงาน").setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph("1. Client: pdf.js แปลง PDF → JPEG images (ทีละหน้า)");
+  body.appendParagraph("2. Server: OCR.space อ่านรูปภาพ → text");
+  body.appendParagraph("3. Server: Typhoon API แปลง text → structured JSON (โปรโมชั่น)");
+  body.appendParagraph("4. Client: แสดง editable preview → user แก้ไข → บันทึกเป็น Google Sheet");
+
+  doc.saveAndClose();
+
+  var file = DriveApp.getFileById(doc.getId());
+  var dest = DriveApp.getFolderById(PDF_OUTPUT_FOLDER_ID);
+  file.moveTo(dest);
+
+  return { url: doc.getUrl(), name: "Typhoon API Config" };
 }
