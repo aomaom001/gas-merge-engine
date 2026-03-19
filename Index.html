@@ -16,6 +16,8 @@
         --text-primary:#0f172a;--text-secondary:#64748b;--text-light:#cbd5e1;--text-white:#f8fafc;
         --border:#e2e8f0;--shadow:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -2px rgba(0,0,0,0.1);
         --radius:12px;--chat-ai-bg:var(--bg-page);
+        --gooey-color-1:#ffffff;--gooey-color-2:rgba(255,255,255,0.85);
+        --gooey-color-3:rgba(190,210,255,0.9);--gooey-color-4:rgba(99,130,246,0.85);
       }
       body.dark {
         --bg-card:#1e293b;--bg-page:#0f172a;--bg-input:#334155;--bg-check:#334155;
@@ -63,14 +65,46 @@
 
       /* MAIN APP */
       #main-app{display:none;width:100vw;height:100vh;flex-direction:column;background:var(--bg-page);transition:background .3s}
-      .nav-bar{background:#09090b;display:flex;align-items:center;gap:4px;width:100%;flex-shrink:0;padding:8px 20px;border-bottom:1px solid rgba(255,255,255,0.06);position:relative;z-index:10}
-      .nav-item{padding:9px 20px;color:rgba(255,255,255,0.45);cursor:pointer;font-weight:500;font-size:13px;transition:all .2s;position:relative;border:none;background:none;border-radius:8px;letter-spacing:0.01em}
-      .nav-item:hover{color:rgba(255,255,255,0.85);background:rgba(255,255,255,0.05)}
-      .nav-item.active{color:#fff;background:rgba(255,255,255,0.08)}
-      .nav-item.active::after{display:none}
+      .nav-bar{background:#09090b;display:flex;align-items:center;width:100%;flex-shrink:0;padding:6px 20px;border-bottom:1px solid rgba(255,255,255,0.06);position:relative;z-index:10;overflow:hidden}
       .nav-spacer{flex:1}
       .nav-toggle{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.5);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;transition:all .2s;font-family:'Prompt',sans-serif;letter-spacing:0.02em}
       .nav-toggle:hover{background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.15)}
+
+      /* ---- GOOEY NAV ---- */
+      .gooey-nav-container{position:relative;display:flex;align-items:center}
+      .gooey-nav-container nav ul{display:flex;gap:0.4em;list-style:none;padding:0 0.4em;margin:0;position:relative;z-index:3}
+      .gooey-nav-container nav ul li{border-radius:100vw;position:relative;cursor:pointer;transition:color 0.3s ease;color:rgba(255,255,255,0.5);font-size:13px;font-weight:500;letter-spacing:0.01em}
+      .gooey-nav-container nav ul li a{display:inline-block;padding:0.55em 1.2em;color:inherit;text-decoration:none;user-select:none}
+      .gooey-nav-container nav ul li::after{content:'';position:absolute;inset:0;border-radius:100vw;background:white;opacity:0;transform:scale(0);transition:all 0.3s ease;z-index:-1}
+      .gooey-nav-container nav ul li.active{color:#000 !important;text-shadow:none}
+      .gooey-nav-container nav ul li.active a{color:#000;text-shadow:none}
+      .gooey-nav-container nav ul li.active::after{opacity:1;transform:scale(1)}
+      .gooey-nav-container nav ul li:hover:not(.active){color:rgba(255,255,255,0.85)}
+      .gooey-effect{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;display:grid;place-items:center}
+      .gooey-effect.gooey-text{color:rgba(255,255,255,0.5);font-size:13px;font-weight:500;letter-spacing:0.01em;transition:color 0.3s ease;z-index:4}
+      .gooey-effect.gooey-text.active{color:#000}
+      .gooey-effect.gooey-filter{filter:blur(7px) contrast(100) blur(0);mix-blend-mode:lighten;z-index:1}
+      .gooey-effect.gooey-filter::before{content:'';position:absolute;inset:-75px;z-index:-2;background:black}
+      .gooey-effect.gooey-filter::after{content:'';position:absolute;inset:0;background:white;transform:scale(0);opacity:0;z-index:-1;border-radius:100vw}
+      .gooey-effect.active::after{animation:gooey-pill 0.3s ease both}
+      @keyframes gooey-pill{to{transform:scale(1);opacity:1}}
+      .gooey-particle,.gooey-point{display:block;opacity:0;width:20px;height:20px;border-radius:100%;transform-origin:center}
+      .gooey-particle{--time:5s;position:absolute;top:calc(50% - 8px);left:calc(50% - 8px);animation:gooey-particle-anim var(--time) ease 1 -350ms}
+      .gooey-point{background:var(--color);opacity:1;animation:gooey-point-anim var(--time) ease 1 -350ms}
+      @keyframes gooey-particle-anim{
+        0%{transform:rotate(0deg) translate(var(--start-x),var(--start-y));opacity:1;animation-timing-function:cubic-bezier(0.55,0,1,0.45)}
+        70%{transform:rotate(calc(var(--rotate)*0.5)) translate(calc(var(--end-x)*1.2),calc(var(--end-y)*1.2));opacity:1;animation-timing-function:ease}
+        85%{transform:rotate(calc(var(--rotate)*0.66)) translate(var(--end-x),var(--end-y));opacity:1}
+        100%{transform:rotate(calc(var(--rotate)*1.2)) translate(calc(var(--end-x)*0.5),calc(var(--end-y)*0.5));opacity:1}
+      }
+      @keyframes gooey-point-anim{
+        0%{transform:scale(0);opacity:0;animation-timing-function:cubic-bezier(0.55,0,1,0.45)}
+        25%{transform:scale(calc(var(--scale)*0.25))}
+        38%{opacity:1}
+        65%{transform:scale(var(--scale));opacity:1;animation-timing-function:ease}
+        85%{transform:scale(var(--scale));opacity:1}
+        100%{transform:scale(0);opacity:0}
+      }
       .page{display:none;padding:20px;flex:1;overflow:hidden;min-height:0}.page.active{display:flex;flex-direction:column}
 
       /* CHAT */
@@ -266,9 +300,17 @@
     <!-- MAIN APP -->
     <div class="container" id="main-app">
       <div class="nav-bar">
-        <div id="tab1" class="nav-item active" onclick="showPage('chat-page','tab1')">AI Chat</div>
-        <div id="tab2" class="nav-item" onclick="showPage('merge-page','tab2')">Merge Files</div>
-        <div id="tab3" class="nav-item" onclick="showPage('update-page','tab3')">PDF Extract</div>
+        <div class="gooey-nav-container" id="gooeyNavContainer">
+          <nav>
+            <ul>
+              <li id="tab1" class="nav-item active" onclick="gooeyHandleNav(this,'chat-page','tab1')"><a>AI Chat</a></li>
+              <li id="tab2" class="nav-item" onclick="gooeyHandleNav(this,'merge-page','tab2')"><a>Merge Files</a></li>
+              <li id="tab3" class="nav-item" onclick="gooeyHandleNav(this,'update-page','tab3')"><a>PDF Extract</a></li>
+            </ul>
+          </nav>
+          <span class="gooey-effect gooey-filter" id="gooeyFilter"></span>
+          <span class="gooey-effect gooey-text" id="gooeyText"></span>
+        </div>
         <div class="nav-spacer"></div>
         <button class="nav-toggle" id="darkToggle" onclick="toggleDarkMode()" title="Toggle theme">Dark</button>
       </div>
@@ -647,6 +689,7 @@
         document.querySelectorAll('.nav-item').forEach(function(x) { x.classList.remove('active'); });
         document.getElementById(p).classList.add('active');
         document.getElementById(t).classList.add('active');
+        gooeyUpdateActivePosition();
       }
 
       function hideAllOverlayPages_() {
@@ -663,6 +706,7 @@
         var mp = document.getElementById('mapping-page');
         mp.style.display = 'flex'; mp.classList.add('active');
         document.getElementById('tab2').classList.add('active');
+        gooeyUpdateActivePosition();
       }
 
       function hideMappingPage() {
@@ -677,6 +721,7 @@
         var pp = document.getElementById('preview-page');
         pp.style.display = 'flex'; pp.classList.add('active');
         document.getElementById('tab2').classList.add('active');
+        gooeyUpdateActivePosition();
       }
 
       function hidePreviewPage() {
@@ -2342,6 +2387,128 @@
           current = (current + 1) % WORDS.length;
           moveTo(current);
         }, (ANIM_DUR + PAUSE) * 1000);
+      })();
+
+      /* ==========================================
+         GOOEY NAV — vanilla JS port of GooeyNav
+         ========================================== */
+      (function() {
+        var PARTICLE_COUNT   = 15;
+        var PARTICLE_DIST    = [90, 10];
+        var PARTICLE_R       = 100;
+        var ANIM_TIME        = 600;
+        var TIME_VAR         = 300;
+        var COLORS           = [1, 2, 3, 1, 2, 3, 1, 4];
+
+        function noise(n) { n = n || 1; return n / 2 - Math.random() * n; }
+
+        function getXY(dist, idx, total) {
+          var angle = ((360 + noise(8)) / total) * idx * (Math.PI / 180);
+          return [dist * Math.cos(angle), dist * Math.sin(angle)];
+        }
+
+        function createParticle(i) {
+          var d = PARTICLE_DIST, r = PARTICLE_R;
+          var t = ANIM_TIME * 2 + noise(TIME_VAR * 2);
+          var rot = noise(r / 10);
+          return {
+            start: getXY(d[0], PARTICLE_COUNT - i, PARTICLE_COUNT),
+            end:   getXY(d[1] + noise(7), PARTICLE_COUNT - i, PARTICLE_COUNT),
+            time:  t,
+            scale: 1 + noise(0.2),
+            color: COLORS[Math.floor(Math.random() * COLORS.length)],
+            rotate: rot > 0 ? (rot + r / 20) * 10 : (rot - r / 20) * 10
+          };
+        }
+
+        function makeParticles(el) {
+          var bubbleTime = ANIM_TIME * 2 + TIME_VAR;
+          el.style.setProperty('--time', bubbleTime + 'ms');
+          el.classList.remove('active');
+          for (var i = 0; i < PARTICLE_COUNT; i++) {
+            (function(p) {
+              setTimeout(function() {
+                var particle = document.createElement('span');
+                var point    = document.createElement('span');
+                particle.classList.add('gooey-particle');
+                particle.style.setProperty('--start-x', p.start[0] + 'px');
+                particle.style.setProperty('--start-y', p.start[1] + 'px');
+                particle.style.setProperty('--end-x',   p.end[0]   + 'px');
+                particle.style.setProperty('--end-y',   p.end[1]   + 'px');
+                particle.style.setProperty('--time',    p.time      + 'ms');
+                particle.style.setProperty('--scale',   p.scale     + '');
+                particle.style.setProperty('--color',   'var(--gooey-color-' + p.color + ', white)');
+                particle.style.setProperty('--rotate',  p.rotate    + 'deg');
+                point.classList.add('gooey-point');
+                particle.appendChild(point);
+                el.appendChild(particle);
+                requestAnimationFrame(function() { el.classList.add('active'); });
+                setTimeout(function() { try { el.removeChild(particle); } catch(e) {} }, p.time);
+              }, 30);
+            })(createParticle(i));
+          }
+        }
+
+        function updatePos(liEl) {
+          var container = document.getElementById('gooeyNavContainer');
+          var filterEl  = document.getElementById('gooeyFilter');
+          var textEl    = document.getElementById('gooeyText');
+          if (!container || !filterEl || !textEl || !liEl) return;
+          var cr  = container.getBoundingClientRect();
+          var lr  = liEl.getBoundingClientRect();
+          var css = { left: (lr.left - cr.left) + 'px', top: (lr.top - cr.top) + 'px',
+                      width: lr.width + 'px', height: lr.height + 'px' };
+          Object.assign(filterEl.style, css);
+          Object.assign(textEl.style, css);
+          var a = liEl.querySelector('a');
+          textEl.innerText = a ? a.innerText : liEl.innerText;
+        }
+
+        /* Called by nav li onclick */
+        window.gooeyHandleNav = function(liEl, pageId, tabId) {
+          var filterEl = document.getElementById('gooeyFilter');
+          var textEl   = document.getElementById('gooeyText');
+          updatePos(liEl);
+          if (filterEl) {
+            filterEl.querySelectorAll('.gooey-particle').forEach(function(p) {
+              try { filterEl.removeChild(p); } catch(e) {}
+            });
+            makeParticles(filterEl);
+          }
+          if (textEl) {
+            textEl.classList.remove('active');
+            void textEl.offsetWidth;
+            textEl.classList.add('active');
+          }
+          showPage(pageId, tabId);
+        };
+
+        /* Called by showPage / showMappingPage / showPreviewPage to keep pill in sync */
+        window.gooeyUpdateActivePosition = function() {
+          var active = document.querySelector('.gooey-nav-container li.nav-item.active');
+          var textEl = document.getElementById('gooeyText');
+          if (active) {
+            updatePos(active);
+            if (textEl && !textEl.classList.contains('active')) textEl.classList.add('active');
+          }
+        };
+
+        /* Init after DOM is ready */
+        function init() {
+          var active = document.querySelector('.gooey-nav-container li.nav-item.active');
+          var textEl = document.getElementById('gooeyText');
+          if (active) { updatePos(active); if (textEl) textEl.classList.add('active'); }
+          var container = document.getElementById('gooeyNavContainer');
+          if (container && window.ResizeObserver) {
+            new ResizeObserver(function() { window.gooeyUpdateActivePosition(); }).observe(container);
+          }
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+        } else {
+          setTimeout(init, 0);
+        }
       })();
     </script>
   </body>

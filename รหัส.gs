@@ -1083,18 +1083,15 @@ function ocrPdfPages_(base64Data, ocrKey) {
   return { text: allText.trim(), pages: json.ParsedResults.length };
 }
 
-/* ── Gemini: text → structured JSON ── */
-function typhoonTextToPromo_(apiKey, ocrText, pageRange) {
+/* ── n8n Webhook: OCR text → structured JSON ── */
+var N8N_WEBHOOK_URL_ = "https://support.ww.co.th/ai1/webhook/714734e9-63d0-4190-bcb6-3b61c059954b";
+
+function n8nTextToPromo_(ocrText, pageRange) {
   var pageInst = (!pageRange || pageRange === "all")
     ? "ทุกหน้า"
     : "เฉพาะหน้า " + pageRange + " เท่านั้น (ข้ามหน้าอื่น)";
 
-  var systemMsg =
-    'คุณคือ AI ที่เชี่ยวชาญการสกัดข้อมูลโปรโมชั่นจากเอกสาร PDF ของ True/dtac\n' +
-    'คุณจะได้รับข้อความที่ OCR มาจาก PDF แล้วต้องสกัดข้อมูลโปรโมชั่นเป็น JSON array\n' +
-    'ตอบเป็น JSON array เท่านั้น ห้ามมี markdown, ห้ามมีข้อความอื่นนอก JSON';
-
-  var userMsg =
+  var prompt =
     'ข้อความด้านล่างนี้ถูก OCR มาจาก PDF (' + pageInst + ')\n' +
     'สกัดข้อมูลโปรโมชั่น/แพ็กเกจทั้งหมดที่พบในตาราง\n' +
     'คืนผลเป็น JSON array โดยแต่ละ object มี key ดังนี้:\n\n' +
@@ -1109,77 +1106,69 @@ function typhoonTextToPromo_(apiKey, ocrText, pageRange) {
     '- "netPrice"       : ราคาที่ลูกค้าจ่ายจริง (บาท/เดือน)\n' +
     '- "mnpDiscount"    : ส่วนลดย้ายค่าย (บาท)\n' +
     '- "advancePayment" : ค่าบริการเหมาจ่ายที่ชำระไว้ก่อน\n' +
-    '- "campaign"       : Campaign Name / Profile ที่ใช้ออกออเดอร์ เช่น Join us get more\n' +
+    '- "campaign"       : Campaign Name / Profile ที่ใช้ออกออเดอร์\n' +
     '- "contract"       : ระยะสัญญา (เดือน) เช่น 12, 24\n' +
     '- "startDate"      : วันเริ่มขาย (ถ้ามี)\n' +
     '- "endDate"        : วันสิ้นสุด (ถ้ามี)\n' +
     '- "page"           : หมายเลขหน้าใน PDF ที่ดึงข้อมูลมา\n\n' +
     'กฎสำคัญ:\n' +
     '- ถ้าข้อมูลไม่มีหรือไม่เกี่ยวข้อง ให้ใส่ "" (string ว่าง)\n' +
-    '- แต่ละ object = 1 รายการโปรโมชั่นที่แตกต่างกัน (ต่าง MKT Code / ต่างราคา / ต่างความเร็ว)\n' +
+    '- แต่ละ object = 1 รายการโปรโมชั่นที่แตกต่างกัน\n' +
     '- ถ้า 1 หน้ามีหลายแพ็กเกจ/หลายราคา ให้แยกเป็นหลาย object\n' +
-    '- ข้ามหน้าที่ไม่มีตารางโปรโมชั่น (หน้าปก, สารบัญ, ขั้นตอนการขาย, รูปภาพ, flow chart)\n' +
+    '- ข้ามหน้าที่ไม่มีตารางโปรโมชั่น (หน้าปก, สารบัญ, ขั้นตอนการขาย, รูปภาพ)\n' +
     '- ตอบเป็น JSON array เท่านั้น ห้ามมี markdown, ห้ามมีข้อความอื่นนอก JSON\n\n' +
     '=== OCR TEXT ===\n' + ocrText;
 
-  var apiUrl = "https://api.opentyphoon.ai/v1/chat/completions";
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    try {
+      var res = UrlFetchApp.fetch(N8N_WEBHOOK_URL_, {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify({ ocrText: prompt }),
+        muteHttpExceptions: true
+      });
+      var code = res.getResponseCode();
+      var raw  = res.getContentText();
 
-  // ลอง model ทีละตัว (ใหม่สุดก่อน)
-  var models = [
-    "typhoon-v2-70b-instruct",
-    "typhoon-v2-8b-instruct",
-    "typhoon-v1.5x-70b-instruct"
-  ];
-
-  var lastError = "";
-  for (var m = 0; m < models.length; m++) {
-    var modelName = models[m];
-    var payload = {
-      model: modelName,
-      messages: [
-        { role: "system", content: systemMsg },
-        { role: "user",   content: userMsg }
-      ],
-      temperature: 0.1,
-      max_tokens: 8192
-    };
-
-    for (var attempt = 1; attempt <= 2; attempt++) {
-      try {
-        var res = UrlFetchApp.fetch(apiUrl, {
-          method: "post",
-          contentType: "application/json",
-          headers: { "Authorization": "Bearer " + apiKey },
-          payload: JSON.stringify(payload),
-          muteHttpExceptions: true
-        });
-        var code = res.getResponseCode();
-        var body = res.getContentText();
-
-        if (code === 200) {
-          var json = JSON.parse(body);
-          var text = json.choices[0].message.content;
-          text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-          var rows = JSON.parse(text);
-          if (!Array.isArray(rows)) rows = [rows];
-          return { rows: rows, total: rows.length, model: modelName, method: "OCR+Typhoon" };
-        }
-        if (code === 400) {
-          // Model not found → ลอง model ถัดไป
-          lastError = "HTTP 400 [" + modelName + "]: " + body.substring(0, 200);
-          break;
-        }
-        if (code === 429 && attempt < 2) { Utilities.sleep(5000); continue; }
-        lastError = "HTTP " + code + " [" + modelName + "]: " + body.substring(0, 200);
-        break;
-      } catch(e) {
-        lastError = modelName + ": " + e.message;
-        if (attempt < 2) { Utilities.sleep(3000); continue; }
-        break;
+      if (code !== 200) {
+        if (attempt < 3) { Utilities.sleep(3000); continue; }
+        return { error: "n8n ตอบกลับ HTTP " + code + " — " + raw.substring(0, 300) };
       }
+      if (!raw || !raw.trim()) {
+        if (attempt < 3) { Utilities.sleep(2000); continue; }
+        return { error: "n8n ไม่ส่งข้อมูลกลับมา (empty response)" };
+      }
+
+      // แกะ JSON array จาก response
+      var text = raw.trim();
+      text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+
+      // ถ้า n8n ตอบเป็น JSON object อาจต้องดึง .output หรือ .data
+      try {
+        var parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          return { rows: parsed, total: parsed.length, method: "OCR+n8n" };
+        }
+        if (parsed && parsed.output) {
+          var inner = typeof parsed.output === "string"
+            ? JSON.parse(parsed.output.replace(/^```(?:json)?\s*/i,"").replace(/\s*```\s*$/,"").trim())
+            : parsed.output;
+          if (Array.isArray(inner)) return { rows: inner, total: inner.length, method: "OCR+n8n" };
+        }
+        if (parsed && parsed.data && Array.isArray(parsed.data)) {
+          return { rows: parsed.data, total: parsed.data.length, method: "OCR+n8n" };
+        }
+        // ถ้าเป็น object เดี่ยว ให้ wrap
+        return { rows: [parsed], total: 1, method: "OCR+n8n" };
+      } catch(parseErr) {
+        return { error: "แกะ JSON จาก n8n ไม่ได้: " + parseErr.message + "\nResponse: " + text.substring(0, 300) };
+      }
+    } catch(e) {
+      if (attempt < 3) { Utilities.sleep(3000); continue; }
+      return { error: "เรียก n8n ล้มเหลว: " + e.message };
     }
   }
-  return { error: "Typhoon API ล้มเหลวทุก model — " + lastError };
+  return { error: "n8n ไม่ตอบสนองหลังลอง 3 ครั้ง" };
 }
 
 
@@ -1190,9 +1179,6 @@ function typhoonTextToPromo_(apiKey, ocrText, pageRange) {
 function extractPdfPageImages(token, images, pageRange) {
   requireAuth_(token);
   var props  = PropertiesService.getScriptProperties();
-  var apiKey = props.getProperty('TYPHOON_API_KEY');
-  if (!apiKey || !apiKey.trim()) return { error: "ไม่พบ TYPHOON_API_KEY กรุณาตั้งค่าใน Script Properties" };
-
   var ocrKey = props.getProperty('OCR_API_KEY') || 'helloworld';
 
   if (!images || images.length === 0) return { error: "ไม่ได้รับรูปภาพจาก PDF" };
@@ -1221,13 +1207,13 @@ function extractPdfPageImages(token, images, pageRange) {
     return { error: "OCR ไม่สามารถอ่านข้อความจากรูปภาพได้\n" + ocrErrors.join("\n") };
   }
 
-  // ส่ง OCR text ไป Typhoon เพื่อแปลงเป็น structured JSON
-  var result = typhoonTextToPromo_(apiKey, allText.trim(), pageRange);
+  // ส่ง OCR text ไป n8n เพื่อแปลงเป็น structured JSON
+  var result = n8nTextToPromo_(allText.trim(), pageRange);
   if (result.error) return result;
 
   result.ocrPages  = images.length;
   result.ocrErrors = ocrErrors;
-  result.method    = "OCR+Typhoon (Images)";
+  result.method    = "OCR+n8n (OpenRouter)";
   return result;
 }
 
