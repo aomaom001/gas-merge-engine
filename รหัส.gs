@@ -219,7 +219,11 @@ function askAI(token, userQuestion, fileConfigs) {
       var lastRow = Math.min(sh.getLastRow(), 1500);
       var lastCol = sh.getLastColumn();
       if (!lastRow || !lastCol) return;
-      context += "\nSHEET: " + sh.getName() + "\nDATA: " + JSON.stringify(sh.getRange(1,1,lastRow,lastCol).getValues());
+      var rows = sh.getRange(1,1,lastRow,lastCol).getValues().filter(function(row) {
+        return row.some(function(cell) { return cell !== "" && cell !== null; });
+      });
+      if (!rows.length) return;
+      context += "\nSHEET: " + sh.getName() + "\nDATA: " + JSON.stringify(rows);
     });
   });
 
