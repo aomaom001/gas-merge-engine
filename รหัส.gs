@@ -433,10 +433,10 @@ function buildSheetsApiUrl_(spreadsheetId, range, fields) {
 function parallelFetchSheetData_(fileInfos) {
   var oauthToken = ScriptApp.getOAuthToken();
   var authHeaders = { "Authorization": "Bearer " + oauthToken };
-  var BATCH_SIZE = 3; // 3 ไฟล์ต่อ batch (ไม่เกิน 60 req/min)
-  var BATCH_DELAY = 4000; // 4 วินาทีระหว่าง batch
-  var MAX_RETRIES = 3; // retry สูงสุด 3 รอบ
-  var RETRY_DELAY = 5000; // 5 วินาทีต่อ retry
+  var BATCH_SIZE = 4; // frontend ส่งมาทีละ 3-4 ไฟล์อยู่แล้ว → ยิงทีเดียว
+  var BATCH_DELAY = 1000; // delay เล็กน้อยระหว่าง batch (ถ้ามี)
+  var MAX_RETRIES = 3;
+  var RETRY_DELAY = 3000;
   var fields = "sheets.data.rowData.values(effectiveValue,formattedValue,effectiveFormat(backgroundColor,textFormat(foregroundColor,bold,strikethrough),horizontalAlignment)),sheets.merges";
 
   // สร้าง result placeholders
@@ -816,86 +816,50 @@ function getPreviewData(token, configs, manualMapping) {
 }
 
 /* ==========================================
-   MERGE SELECTED FILES
-   cfg per sheet: { fileId, fileName, sheetName, headerRow,
-                    mapping: {th: [srcCol,...]},
-                    defaultValues: {th: "value"} }
+   MERGE — STEP 1: initMerge
+   สร้างไฟล์ + discover masterHeaders
+   Frontend เรียกครั้งเดียว ได้ fileId + masterHeaders กลับมา
    ========================================== */
-function mergeSelectedFiles(token, configs, newFileName, targetFolderId) {
+function initMerge(token, configs, newFileName, targetFolderId) {
   requireAuth_(token);
   if (!newFileName || !newFileName.trim()) return JSON.stringify({ error: "กรุณาระบุชื่อไฟล์ใหม่" });
 
-  var nowStr        = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
-  var masterHeaders = TEMPLATE_HEADERS.slice();
-  var special       = AUTO_DATE_HEADERS.slice();
-  var errorFiles    = [];
-
   try {
-    // PHASE 1: Discovery — หา sheet metadata (ใช้ SpreadsheetApp เบาๆ แค่ header + row/col count)
-    var fileInfos = [];
+    var masterHeaders = TEMPLATE_HEADERS.slice();
+    var errorFiles = [];
+
+    // Discovery — อ่านแค่ header row จากทุกไฟล์ (เร็วมาก)
     configs.forEach(function(cfg) {
       if (!isFileInAllowedFolder_(cfg.fileId)) return;
       try {
-        var ss    = SpreadsheetApp.openById(cfg.fileId);
+        var ss = SpreadsheetApp.openById(cfg.fileId);
         var sheet = ss.getSheetByName(cfg.sheetName);
         if (!sheet || sheet.isSheetHidden()) return;
-
-        var lastRow = sheet.getLastRow();
         var lastCol = sheet.getLastColumn();
-        var hRow    = cfg.headerRow || 1;
-        if (!lastRow || !lastCol || lastRow <= hRow) return;
-
-        fileInfos.push({
-          cfg: cfg,
-          spreadsheetId: cfg.fileId,
-          sheetName: cfg.sheetName,
-          headerRow: hRow,
-          dataStartRow: hRow + 1,
-          dataEndRow: lastRow,
-          colCount: lastCol
+        var hRow = cfg.headerRow || 1;
+        if (!lastCol) return;
+        var rawH = sheet.getRange(hRow,1,1,lastCol).getDisplayValues()[0].map(function(h){return h.toString().trim();});
+        var cfgMap = cfg.mapping || {};
+        rawH.forEach(function(h) {
+          if (!h) return;
+          var normH = normalizeHeader_(h);
+          var isMapped = Object.keys(cfgMap).some(function(th) {
+            var vals = cfgMap[th]; if (!Array.isArray(vals)) vals = [vals];
+            return vals.some(function(v) { return v && normalizeHeader_(v) === normH; });
+          });
+          if (!isMapped && !masterHeaders.some(function(mh){ return normalizeHeader_(mh) === normH; })) {
+            masterHeaders.push(h);
+          }
         });
-      } catch(e) {
-        errorFiles.push({ name: cfg.fileName + " / " + cfg.sheetName, reason: e.message });
-      }
+      } catch(e) { errorFiles.push({ name: cfg.fileName + " / " + cfg.sheetName, reason: e.message }); }
     });
 
-    if (!fileInfos.length) return JSON.stringify({ error: "ไม่พบข้อมูลในไฟล์ที่เลือก" });
-
-    // PHASE 2: Parallel fetch — อ่านทุกไฟล์พร้อมกัน
-    var fetched = parallelFetchSheetData_(fileInfos);
-
-    // Build masterHeaders from fetched headers + apply merges
-    fetched.forEach(function(result, idx) {
-      if (result.error) {
-        errorFiles.push({ name: fileInfos[idx].cfg.fileName + " / " + fileInfos[idx].cfg.sheetName, reason: result.error });
-        return;
-      }
-
-      // Apply merged cells
-      applyMerges_(result, fileInfos[idx].dataStartRow);
-
-      // Extra cols discovery
-      var cfgMap = fileInfos[idx].cfg.mapping || {};
-      result.headers.forEach(function(h) {
-        if (!h) return;
-        var normH = normalizeHeader_(h);
-        var isMapped = Object.keys(cfgMap).some(function(th) {
-          var vals = cfgMap[th];
-          if (!Array.isArray(vals)) vals = [vals];
-          return vals.some(function(v) { return v && normalizeHeader_(v) === normH; });
-        });
-        if (!isMapped && !masterHeaders.some(function(mh){ return normalizeHeader_(mh) === normH; })) {
-          masterHeaders.push(h);
-        }
-      });
-    });
-
-    // แทรก [ที่มา] ต่อจาก TEMPLATE_HEADERS (ก่อน extra cols)
+    // แทรก [ที่มา]
     masterHeaders.splice(TEMPLATE_HEADERS.length, 0, "[ที่มา]");
 
-    // PHASE 3: สร้างไฟล์
-    var newSS  = SpreadsheetApp.create(newFileName);
-    var dest   = targetFolderId ? DriveApp.getFolderById(targetFolderId) : DriveApp.getFolderById(MAIN_FOLDER_ID);
+    // สร้างไฟล์
+    var newSS = SpreadsheetApp.create(newFileName);
+    var dest = targetFolderId ? DriveApp.getFolderById(targetFolderId) : DriveApp.getFolderById(MAIN_FOLDER_ID);
     DriveApp.getFileById(newSS.getId()).moveTo(dest);
 
     var destSheet = newSS.getSheets()[0];
@@ -906,78 +870,122 @@ function mergeSelectedFiles(token, configs, newFileName, targetFolderId) {
       .setHorizontalAlignment("center").setVerticalAlignment("middle");
     destSheet.setFrozenRows(1);
 
-    // PHASE 4: Process + batch write
+    return JSON.stringify({
+      success: true,
+      outputId: newSS.getId(),
+      outputUrl: newSS.getUrl(),
+      masterHeaders: masterHeaders,
+      errorFiles: errorFiles
+    });
+  } catch(e) { return JSON.stringify({ error: e.message }); }
+}
+
+/* ==========================================
+   MERGE — STEP 2: mergeBatch
+   ดึงข้อมูลไฟล์ batch เล็กๆ (3-4 ไฟล์) + เขียนลง output
+   Frontend เรียกซ้ำทีละ batch จนครบ
+   ========================================== */
+function mergeBatch(token, outputId, masterHeaders, batchConfigs, currentRow) {
+  requireAuth_(token);
+  var nowStr  = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+  var special = AUTO_DATE_HEADERS.slice();
+
+  try {
+    // PHASE 1: Collect file info for this batch
+    var fileInfos = [];
+    var errorFiles = [];
+    batchConfigs.forEach(function(cfg) {
+      if (!isFileInAllowedFolder_(cfg.fileId)) return;
+      try {
+        var ss = SpreadsheetApp.openById(cfg.fileId);
+        var sheet = ss.getSheetByName(cfg.sheetName);
+        if (!sheet || sheet.isSheetHidden()) return;
+        var lastRow = sheet.getLastRow();
+        var lastCol = sheet.getLastColumn();
+        var hRow = cfg.headerRow || 1;
+        if (!lastRow || !lastCol || lastRow <= hRow) return;
+        fileInfos.push({
+          cfg: cfg, spreadsheetId: cfg.fileId, sheetName: cfg.sheetName,
+          headerRow: hRow, dataStartRow: hRow + 1, dataEndRow: lastRow, colCount: lastCol
+        });
+      } catch(e) { errorFiles.push({ name: cfg.fileName + " / " + cfg.sheetName, reason: e.message }); }
+    });
+
+    if (!fileInfos.length) {
+      return JSON.stringify({ currentRow: currentRow, rows: 0, totalSource: 0,
+        strikeRows: 0, emptyRows: 0, noBrandRows: 0, errorFiles: errorFiles });
+    }
+
+    // PHASE 2: Fetch data (batch เล็ก 3-4 ไฟล์ ไม่โดน rate limit)
+    var fetched = parallelFetchSheetData_(fileInfos);
+
+    // PHASE 3: Process rows
     var allV=[], allB=[], allC=[], allW=[], allA=[];
-    var totalRows = 0, totalSourceRows = 0;
-    var strikeRows = 0, emptyRows = 0, noBrandRows = 0;
+    var totalSourceRows = 0, strikeRows = 0, emptyRows = 0, noBrandRows = 0;
+    var brandMIdx = masterHeaders.indexOf("แบรนด์และรุ่น");
 
     fetched.forEach(function(result, idx) {
-      if (result.error) return;
-      var fi  = fileInfos[idx];
-      var cfg = fi.cfg;
-      var mapping       = cfg.mapping || {};
-      var defaultValues = cfg.defaultValues || {};
+      if (result.error) {
+        errorFiles.push({ name: fileInfos[idx].cfg.fileName + " / " + fileInfos[idx].cfg.sheetName, reason: result.error });
+        return;
+      }
+      applyMerges_(result, fileInfos[idx].dataStartRow);
+      var fi = fileInfos[idx]; var cfg = fi.cfg;
+      var mapping = cfg.mapping || {}; var defaultValues = cfg.defaultValues || {};
       var block = { headers: result.headers, colCount: result.colCount };
-
       totalSourceRows += result.rowCount;
 
       for (var r = 0; r < result.disp.length; r++) {
-        // skip strikethrough
         if (result.strikeSet[r]) { strikeRows++; continue; }
-        // skip empty
-        var allEmpty = result.disp[r].every(function(v){ return !v || !v.toString().trim(); });
-        if (allEmpty) { emptyRows++; continue; }
-
+        var isEmpty = result.disp[r].every(function(v){ return !v || !v.toString().trim(); });
+        if (isEmpty) { emptyRows++; continue; }
         var sourceName = cfg.fileName + " / " + cfg.sheetName;
         var row = buildOutputRow_(masterHeaders, special, AUTO_DATE_HEADERS,
-                                   mapping, defaultValues,
-                                   block, r, result.disp, result.bgs, result.fcs,
+                                   mapping, defaultValues, block, r,
+                                   result.disp, result.bgs, result.fcs,
                                    result.fws, result.als, nowStr, sourceName);
-
-        // เช็ค "แบรนด์และรุ่น" ว่าง → ลบ row ทิ้ง
-        var brandMIdx = masterHeaders.indexOf("แบรนด์และรุ่น");
         if (brandMIdx !== -1) {
           var bv = row.v[brandMIdx];
           if (!bv || !bv.toString().trim()) { noBrandRows++; continue; }
         }
-
         allV.push(row.v); allB.push(row.b); allC.push(row.c);
         allW.push(row.w); allA.push(row.a);
       }
     });
 
-    // Batch write ทีเดียว
-    totalRows = allV.length;
-    if (totalRows > 0) {
-      applyStyles_(destSheet, 2, masterHeaders.length, allV, allB, allC, allW, allA);
-      destSheet.getRange(1,1,totalRows+1,masterHeaders.length).setVerticalAlignment("middle");
-    }
-    destSheet.autoResizeColumns(1, masterHeaders.length);
-
-    var msg = "รวมสำเร็จ: " + totalRows + " แถว  |  ไฟล์: " + newFileName;
-    if (strikeRows > 0 || emptyRows > 0 || noBrandRows > 0) {
-      msg += "\n📊 สรุป: จากทั้งหมด " + totalSourceRows + " แถว";
-      if (strikeRows  > 0) msg += " | ลบขีดฆ่า " + strikeRows + " แถว";
-      if (noBrandRows > 0) msg += " | ไม่มีแบรนด์/รุ่น " + noBrandRows + " แถว";
-      if (emptyRows   > 0) msg += " | ข้ามแถวว่าง " + emptyRows + " แถว";
-    }
-    if (errorFiles.length > 0) {
-      msg += "\n⚠️ ข้ามไฟล์ที่มีปัญหา " + errorFiles.length + " ไฟล์:";
-      errorFiles.forEach(function(ef) { msg += "\n   - " + ef.name + " (" + ef.reason + ")"; });
+    // PHASE 4: Write to output sheet
+    var writtenRows = allV.length;
+    if (writtenRows > 0) {
+      var destSheet = SpreadsheetApp.openById(outputId).getSheetByName("Combined_Data");
+      applyStyles_(destSheet, currentRow, masterHeaders.length, allV, allB, allC, allW, allA);
     }
 
     return JSON.stringify({
-      message:     msg,
-      url:         newSS.getUrl(),
-      fileName:    newFileName,
-      rows:        totalRows,
-      totalSource: totalSourceRows,
-      strikeRows:  strikeRows,
-      noBrandRows: noBrandRows,
-      emptyRows:   emptyRows,
-      errorFiles:  errorFiles
+      currentRow:   currentRow + writtenRows,
+      rows:         writtenRows,
+      totalSource:  totalSourceRows,
+      strikeRows:   strikeRows,
+      emptyRows:    emptyRows,
+      noBrandRows:  noBrandRows,
+      errorFiles:   errorFiles
     });
-  } catch(e) { return JSON.stringify({ error: "ผิดพลาด: " + e.message }); }
+  } catch(e) { return JSON.stringify({ error: e.message }); }
+}
+
+/* ==========================================
+   MERGE — STEP 3: finalizeMerge
+   ปรับ format สุดท้าย (autoResize, alignment)
+   ========================================== */
+function finalizeMerge(token, outputId, masterHeaders, totalRows) {
+  requireAuth_(token);
+  try {
+    var destSheet = SpreadsheetApp.openById(outputId).getSheetByName("Combined_Data");
+    if (totalRows > 0) {
+      destSheet.getRange(1,1,totalRows+1,masterHeaders.length).setVerticalAlignment("middle");
+    }
+    destSheet.autoResizeColumns(1, masterHeaders.length);
+    return JSON.stringify({ success: true });
+  } catch(e) { return JSON.stringify({ error: e.message }); }
 }
 
 /* ==========================================

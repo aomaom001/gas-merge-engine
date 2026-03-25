@@ -1884,49 +1884,100 @@
          ========================================== */
       function executeFinalMerge(btn) {
         btn.disabled = true;
-        toggleLoading(true, "Merging data...");
+        var allConfigs = buildFinalConfigs();
+        var BATCH_SIZE = 3;
+        var totalStats = { rows: 0, totalSource: 0, strikeRows: 0, emptyRows: 0, noBrandRows: 0, errorFiles: [] };
 
+        // STEP 1: initMerge — สร้างไฟล์ + discover headers
+        toggleLoading(true, "กำลังเตรียมไฟล์...");
         google.script.run
           .withSuccessHandler(function(m) {
-            toggleLoading(false); btn.disabled = false;
+            var init;
+            try { init = JSON.parse(m); } catch(e) { toggleLoading(false); btn.disabled = false; alert('initMerge error: ' + m); return; }
+            if (init.error) { toggleLoading(false); btn.disabled = false; alert(init.error); return; }
+            if (init.errorFiles) totalStats.errorFiles = totalStats.errorFiles.concat(init.errorFiles);
 
-            var result = null;
-            try { result = JSON.parse(m); } catch(e) {}
-
-            if (result && result.url) {
-              hideAllOverlayPages_();
-              showPage('merge-page', 'tab2');
-
-              var banner = document.getElementById('mergeResultBanner');
-              var msgEl  = document.getElementById('mergeResultMsg');
-              var linkEl = document.getElementById('mergeResultLink');
-
-              // สร้าง message พร้อม stats
-              var mainMsg = 'Merged: ' + result.rows + ' rows  |  File: ' + result.fileName;
-              if (result.totalSource) {
-                mainMsg += '\nSource: ' + result.totalSource + ' rows';
-                if (result.strikeRows > 0)  mainMsg += ' → ขีดฆ่า -' + result.strikeRows;
-                if (result.noBrandRows > 0) mainMsg += ' → ไม่มีแบรนด์/รุ่น -' + result.noBrandRows;
-                if (result.emptyRows > 0)  mainMsg += ' → แถวว่าง -' + result.emptyRows;
-                mainMsg += ' → คงเหลือ ' + result.rows + ' แถว';
-              }
-              if (result.errorFiles && result.errorFiles.length > 0) {
-                mainMsg += '\nSkipped ' + result.errorFiles.length + ' file(s) with errors:';
-                result.errorFiles.forEach(function(ef) { mainMsg += '\n   - ' + ef.name + ' (' + ef.reason + ')'; });
-              }
-              msgEl.textContent  = mainMsg;
-              linkEl.href        = result.url;
-              linkEl.textContent = 'Open "' + result.fileName + '" in Google Sheets';
-              banner.classList.add('visible');
-              loadMenus();
-            } else {
-              alert(result && result.error ? result.error : m);
-              showPage('merge-page', 'tab2');
-              loadMenus();
+            // STEP 2: mergeBatch — ส่งไฟล์ทีละ batch
+            var batches = [];
+            for (var i = 0; i < allConfigs.length; i += BATCH_SIZE) {
+              batches.push(allConfigs.slice(i, i + BATCH_SIZE));
             }
+            var currentRow = 2;
+            var batchIdx = 0;
+
+            function runNextBatch() {
+              if (batchIdx >= batches.length) {
+                // STEP 3: finalizeMerge
+                toggleLoading(true, "กำลังจัดรูปแบบไฟล์สุดท้าย...");
+                google.script.run
+                  .withSuccessHandler(function() {
+                    toggleLoading(false); btn.disabled = false;
+                    showMergeResult_(init, totalStats);
+                  })
+                  .withFailureHandler(function(e) { toggleLoading(false); btn.disabled = false; showMergeResult_(init, totalStats); })
+                  .finalizeMerge(SESSION_TOKEN, init.outputId, init.masterHeaders, totalStats.rows);
+                return;
+              }
+
+              var progress = 'กำลังรวมไฟล์... (' + (batchIdx + 1) + '/' + batches.length + ' batch)';
+              toggleLoading(true, progress);
+
+              google.script.run
+                .withSuccessHandler(function(m2) {
+                  var br;
+                  try { br = JSON.parse(m2); } catch(e) { /* skip */ }
+                  if (br && !br.error) {
+                    currentRow = br.currentRow;
+                    totalStats.rows += br.rows;
+                    totalStats.totalSource += br.totalSource;
+                    totalStats.strikeRows += br.strikeRows;
+                    totalStats.emptyRows += br.emptyRows;
+                    totalStats.noBrandRows += br.noBrandRows;
+                    if (br.errorFiles) totalStats.errorFiles = totalStats.errorFiles.concat(br.errorFiles);
+                  } else if (br && br.error) {
+                    totalStats.errorFiles.push({ name: 'Batch ' + (batchIdx+1), reason: br.error });
+                  }
+                  batchIdx++;
+                  runNextBatch();
+                })
+                .withFailureHandler(function(e) {
+                  totalStats.errorFiles.push({ name: 'Batch ' + (batchIdx+1), reason: e.message });
+                  batchIdx++;
+                  runNextBatch(); // ข้าม batch ที่ error ไปต่อ
+                })
+                .mergeBatch(SESSION_TOKEN, init.outputId, init.masterHeaders, batches[batchIdx], currentRow);
+            }
+
+            runNextBatch();
           })
           .withFailureHandler(function(e) { toggleLoading(false); btn.disabled = false; if (!handleError(e)) alert('รวมไฟล์ล้มเหลว: ' + e.message); })
-          .mergeSelectedFiles(SESSION_TOKEN, buildFinalConfigs(), mergeState.fileName, mergeState.folderId);
+          .initMerge(SESSION_TOKEN, allConfigs, mergeState.fileName, mergeState.folderId);
+      }
+
+      function showMergeResult_(init, stats) {
+        hideAllOverlayPages_();
+        showPage('merge-page', 'tab2');
+        var banner = document.getElementById('mergeResultBanner');
+        var msgEl  = document.getElementById('mergeResultMsg');
+        var linkEl = document.getElementById('mergeResultLink');
+
+        var mainMsg = '✅ รวมสำเร็จ: ' + stats.rows + ' แถว  |  ไฟล์: ' + mergeState.fileName;
+        if (stats.totalSource) {
+          mainMsg += '\n📊 ต้นฉบับ ' + stats.totalSource + ' แถว';
+          if (stats.strikeRows > 0)  mainMsg += ' → ขีดฆ่า -' + stats.strikeRows;
+          if (stats.noBrandRows > 0) mainMsg += ' → ไม่มีแบรนด์/รุ่น -' + stats.noBrandRows;
+          if (stats.emptyRows > 0)   mainMsg += ' → แถวว่าง -' + stats.emptyRows;
+          mainMsg += ' → คงเหลือ ' + stats.rows + ' แถว';
+        }
+        if (stats.errorFiles && stats.errorFiles.length > 0) {
+          mainMsg += '\n⚠️ ข้ามไฟล์ที่มีปัญหา ' + stats.errorFiles.length + ' ไฟล์: ';
+          mainMsg += stats.errorFiles.map(function(ef) { return ef.name + ' (' + ef.reason + ')'; }).join(' - ');
+        }
+        msgEl.textContent  = mainMsg;
+        linkEl.href        = init.outputUrl;
+        linkEl.textContent = 'เปิด "' + mergeState.fileName + '" ใน Google Sheets';
+        banner.classList.add('visible');
+        loadMenus();
       }
 
       /* ==========================================
